@@ -6,6 +6,7 @@ import com.opp.oder.data.db.dao.MenuItemDao
 import com.opp.oder.data.db.dao.RecipeDao
 import com.opp.oder.data.preset.PresetRecipes
 import com.opp.oder.util.LogWriter
+import com.opp.oder.util.PinHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +29,7 @@ class OderApp : Application() {
     override fun onCreate() {
         super.onCreate()
         LogWriter.init(filesDir)
+        PinHelper.init(this)
         LogWriter.write("APP", "OderApp v1.0.1 onCreate start")
         appScope.launch {
             try {

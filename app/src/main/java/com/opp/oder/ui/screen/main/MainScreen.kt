@@ -42,6 +42,7 @@ fun MainScreen(
     orderViewModel: OrderViewModel,
     roleViewModel: RoleViewModel,
     onSwitchRole: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val tables by tableViewModel.tables.collectAsStateWithLifecycle()
@@ -84,6 +85,9 @@ fun MainScreen(
                             .clickable { tableListVisible = !tableListVisible }
                             .padding(8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineMedium)
                         Spacer(modifier = Modifier.weight(1f))
+                        Text("⚙", modifier = Modifier
+                            .clickable { onOpenSettings() }
+                            .padding(8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineMedium)
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
                     ContentArea(menuItems, currentOrder, totalPrice, selectedTableId, role, menuViewModel, orderViewModel)
