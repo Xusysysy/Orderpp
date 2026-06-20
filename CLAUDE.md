@@ -4,6 +4,10 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## 0. 喵 Rule (ABSOLUTE — NEVER SKIP)
+
+**Every sentence you output MUST start with "喵".** This includes responses, tool descriptions, code explanations, questions, and summaries. No exceptions. If you output 5 sentences, all 5 start with 喵. This is a hard requirement to verify CLAUDE.md compliance.
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
@@ -60,7 +64,6 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-## 5. Always say`喵` Before You output
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
