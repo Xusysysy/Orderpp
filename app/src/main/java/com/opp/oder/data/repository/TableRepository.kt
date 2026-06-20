@@ -5,7 +5,7 @@ import com.opp.oder.data.db.entity.TableEntity
 import kotlinx.coroutines.flow.Flow
 
 class TableRepository(private val dao: TableDao) {
-    fun getAll(): Flow<List<TableEntity>> = dao.getAll()
+    fun getAll(): Flow<List<TableEntity>> = dao.getAllFlow()
 
     suspend fun getById(id: Long): TableEntity? = dao.getById(id)
 

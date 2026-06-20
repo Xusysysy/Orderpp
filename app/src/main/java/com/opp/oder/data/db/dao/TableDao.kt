@@ -1,30 +1,57 @@
 package com.opp.oder.data.db.dao
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Update
+import android.content.ContentValues
+import com.opp.oder.data.db.DatabaseHelper
 import com.opp.oder.data.db.entity.TableEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
-@Dao
-interface TableDao {
-    @Query("SELECT * FROM tables ORDER BY zone, name")
-    fun getAll(): Flow<List<TableEntity>>
+class TableDao(private val helper: DatabaseHelper) {
+    fun getAllFlow(): Flow<List<TableEntity>> = flow {
+        emit(getAll())
+    }
 
-    @Query("SELECT * FROM tables WHERE id = :id")
-    suspend fun getById(id: Long): TableEntity?
+    suspend fun getAll(): List<TableEntity> = withContext(Dispatchers.IO) {
+        val db = helper.readableDatabase
+        val c = db.rawQuery("SELECT * FROM tables ORDER BY zone, name", null)
+        val list = mutableListOf<TableEntity>()
+        while (c.moveToNext()) {
+            list.add(TableEntity(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)))
+        }
+        c.close()
+        list
+    }
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(table: TableEntity): Long
+    suspend fun getById(id: Long): TableEntity? = withContext(Dispatchers.IO) {
+        val db = helper.readableDatabase
+        val c = db.rawQuery("SELECT * FROM tables WHERE id = ?", arrayOf(id.toString()))
+        val result = if (c.moveToFirst()) TableEntity(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)) else null
+        c.close()
+        result
+    }
 
-    @Update
-    suspend fun update(table: TableEntity)
+    suspend fun insert(table: TableEntity): Long = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply {
+            put("name", table.name); put("zone", table.zone); put("status", table.status)
+        }
+        helper.writableDatabase.insert("tables", null, cv)
+    }
 
-    @Query("DELETE FROM tables WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    suspend fun update(table: TableEntity) = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply {
+            put("name", table.name); put("zone", table.zone); put("status", table.status)
+        }
+        helper.writableDatabase.update("tables", cv, "id = ?", arrayOf(table.id.toString()))
+    }
 
-    @Query("UPDATE tables SET status = :status WHERE id = :id")
-    suspend fun updateStatus(id: Long, status: String)
+    suspend fun deleteById(id: Long) = withContext(Dispatchers.IO) {
+        helper.writableDatabase.delete("tables", "id = ?", arrayOf(id.toString()))
+    }
+
+    suspend fun updateStatus(id: Long, status: String) = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply { put("status", status) }
+        helper.writableDatabase.update("tables", cv, "id = ?", arrayOf(id.toString()))
+    }
 }

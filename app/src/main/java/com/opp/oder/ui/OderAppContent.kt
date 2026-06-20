@@ -35,6 +35,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opp.oder.DbState
 import com.opp.oder.OderApp
+import com.opp.oder.data.db.DatabaseHelper
 import com.opp.oder.data.repository.MenuRepository
 import com.opp.oder.data.repository.OrderRepository
 import com.opp.oder.data.repository.TableRepository
@@ -64,8 +65,7 @@ fun OderAppContent() {
         is DbState.Loading -> LoadingScreen()
         is DbState.Error -> ErrorScreen(s.message)
         is DbState.Ready -> {
-            val safeDb = s.db
-            MainApp(safeDb, app)
+            MainApp(s.helper, app)
         }
     }
 }
@@ -126,13 +126,13 @@ private fun ErrorScreen(message: String) {
 }
 
 @Composable
-private fun MainApp(db: com.opp.oder.data.db.AppDatabase, app: OderApp) {
+private fun MainApp(helper: DatabaseHelper, app: OderApp) {
     val roleViewModel: RoleViewModel = viewModel()
     val hostViewModel: HostViewModel = viewModel()
 
-    val tableRepository = remember { TableRepository(db.tableDao()) }
-    val menuRepository = remember { MenuRepository(db.menuItemDao(), db.recipeDao()) }
-    val orderRepository = remember { OrderRepository(db.orderDao()) }
+    val tableRepository = remember { TableRepository(com.opp.oder.data.db.dao.TableDao(helper)) }
+    val menuRepository = remember { MenuRepository(com.opp.oder.data.db.dao.MenuItemDao(helper), com.opp.oder.data.db.dao.RecipeDao(helper)) }
+    val orderRepository = remember { OrderRepository(com.opp.oder.data.db.dao.OrderDao(helper)) }
 
     val tableViewModel: TableViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
@@ -180,7 +180,7 @@ private fun MainApp(db: com.opp.oder.data.db.AppDatabase, app: OderApp) {
                 viewModel = hostViewModel,
                 discoveredHosts = discoveredHosts,
                 onStartHost = {
-                    val server = HostServer(db)
+                    val server = HostServer(helper)
                     hostViewModel.setHostMode(server, discoveryService)
                     currentScreen = NavScreen.MAIN
                 },

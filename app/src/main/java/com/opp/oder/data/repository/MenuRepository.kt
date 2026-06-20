@@ -6,14 +6,15 @@ import com.opp.oder.data.db.entity.MenuItemEntity
 import com.opp.oder.data.db.entity.RecipeIngredientEntity
 import com.opp.oder.data.db.entity.RecipeStepEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class MenuRepository(
     private val menuDao: MenuItemDao,
     private val recipeDao: RecipeDao
 ) {
-    fun getAll(): Flow<List<MenuItemEntity>> = menuDao.getAll()
+    fun getAll(): Flow<List<MenuItemEntity>> = menuDao.getAllFlow()
 
-    fun getByCategory(category: String): Flow<List<MenuItemEntity>> = menuDao.getByCategory(category)
+    fun getByCategory(category: String): Flow<List<MenuItemEntity>> = flow { emit(menuDao.getByCategory(category)) }
 
     suspend fun getById(id: Long): MenuItemEntity? = menuDao.getById(id)
 

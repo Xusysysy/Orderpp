@@ -5,13 +5,14 @@ import com.opp.oder.data.db.dao.OrderWithItems
 import com.opp.oder.data.db.entity.OrderEntity
 import com.opp.oder.data.db.entity.OrderItemEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class OrderRepository(private val dao: OrderDao) {
     suspend fun getActiveOrder(tableId: Long): OrderEntity? = dao.getActiveOrder(tableId)
 
     suspend fun getOrderWithItems(orderId: Long): OrderWithItems? = dao.getOrderWithItems(orderId)
 
-    fun getAllOrders(): Flow<List<OrderEntity>> = dao.getAllOrders()
+    fun getAllOrders(): Flow<List<OrderEntity>> = flow { emit(dao.getAllOrders()) }
 
     suspend fun createOrder(tableId: Long): OrderEntity {
         val order = OrderEntity(tableId = tableId)
