@@ -1,7 +1,7 @@
 package com.opp.oder.data.preset
 
 object PresetRecipes {
-    private val cocktails = listOf(
+    val cocktails = listOf(
         Cocktail(
             name = "Mojito",
             category = "cocktail",

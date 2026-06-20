@@ -14,7 +14,6 @@ import com.opp.oder.data.db.entity.OrderItemEntity
 import com.opp.oder.data.db.entity.RecipeIngredientEntity
 import com.opp.oder.data.db.entity.RecipeStepEntity
 import com.opp.oder.data.db.entity.TableEntity
-import com.opp.oder.data.preset.PresetRecipes
 
 @Database(
     entities = [
@@ -45,19 +44,6 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "oder_database"
                 )
-                    .addCallback(object : RoomDatabase.Callback() {
-                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                            super.onCreate(db)
-                            val sqls = PresetRecipes.getInsertSqlList()
-                            db.beginTransaction()
-                            try {
-                                sqls.forEach { db.execSQL(it) }
-                                db.setTransactionSuccessful()
-                            } finally {
-                                db.endTransaction()
-                            }
-                        }
-                    })
                     .build()
                     .also { INSTANCE = it }
             }
