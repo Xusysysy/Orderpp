@@ -102,7 +102,7 @@ private fun ErrorScreen(message: String) {
 @Composable
 private fun MainApp(helper: DatabaseHelper, app: OderApp) {
     var isDark by remember { mutableStateOf(true) }
-    var currentScreen by remember { mutableStateOf(NavScreen.ROLE_SELECT) }
+    var currentScreen by remember { mutableStateOf(NavScreen.MAIN) }
     var showSettings by remember { mutableStateOf(false) }
 
     OderTheme(darkTheme = isDark) {
@@ -117,6 +117,9 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
             }
             NavScreen.MAIN -> {
                 val roleViewModel: RoleViewModel = viewModel()
+                if (roleViewModel.role.value == RoleViewModel.Role.NONE) {
+                    roleViewModel.selectRole(RoleViewModel.Role.GUEST)
+                }
                 val hostViewModel: HostViewModel = viewModel()
                 val tableDao = remember { com.opp.oder.data.db.dao.TableDao(helper) }
                 val menuDao = remember { com.opp.oder.data.db.dao.MenuItemDao(helper) }
@@ -139,7 +142,6 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                 MainScreen(
                     tableViewModel = tableViewModel, menuViewModel = menuViewModel, orderViewModel = orderViewModel,
                     roleViewModel = roleViewModel,
-                    onSwitchRole = { currentScreen = NavScreen.ROLE_SELECT },
                     onOpenSettings = { showSettings = true }
                 )
                 if (showSettings) {
@@ -158,6 +160,7 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                             hostViewModel.setClientMode(ip, SyncClient(ip), discoveryService)
                             showSettings = false
                         },
+                        onSwitchRole = { currentScreen = NavScreen.ROLE_SELECT },
                         onDismiss = { showSettings = false }
                     )
                     discoveryService.startDiscovery()

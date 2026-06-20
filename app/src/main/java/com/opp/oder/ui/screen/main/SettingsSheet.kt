@@ -45,6 +45,7 @@ fun SettingsSheet(
     discoveredHosts: List<NsdServiceInfo>,
     onStartHost: () -> Unit,
     onConnectToHost: (String) -> Unit,
+    onSwitchRole: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -105,6 +106,10 @@ fun SettingsSheet(
                     }
                 }
             }
+            Spacer(Modifier.height(24.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Text("切换角色", modifier = Modifier.clickable { onSwitchRole(); onDismiss() }.padding(vertical = 8.dp),
+                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(24.dp))
         }
     }

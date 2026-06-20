@@ -32,7 +32,6 @@ fun TableListPane(
     isStaff: Boolean,
     onSelectTable: (TableEntity) -> Unit,
     onAddTable: (String) -> Unit,
-    onSwitchRole: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -82,11 +81,6 @@ fun TableListPane(
             ) {
                 Text("+ 添加桌位")
             }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = onSwitchRole, modifier = Modifier.fillMaxWidth()) {
-            Text("切换角色")
         }
     }
 

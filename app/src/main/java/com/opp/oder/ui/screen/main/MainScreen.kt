@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.HorizontalDivider
@@ -35,13 +38,21 @@ import com.opp.oder.viewmodel.OrderViewModel
 import com.opp.oder.viewmodel.RoleViewModel
 import com.opp.oder.viewmodel.TableViewModel
 
+private val CN_NUMS = listOf("零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
+    "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+    "二十一", "二十二", "二十三", "二十四", "二十五", "二十六", "二十七", "二十八", "二十九", "三十")
+
+fun toChineseTableName(name: String): String {
+    val num = name.replace(Regex("[^0-9]"), "").toIntOrNull() ?: return name
+    return if (num in 1..CN_NUMS.lastIndex) CN_NUMS[num] + "号桌" else name
+}
+
 @Composable
 fun MainScreen(
     tableViewModel: TableViewModel,
     menuViewModel: MenuViewModel,
     orderViewModel: OrderViewModel,
     roleViewModel: RoleViewModel,
-    onSwitchRole: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -61,17 +72,17 @@ fun MainScreen(
     val isTablet = config.screenWidthDp >= 600
     var tableListVisible by remember { mutableStateOf(isTablet) }
 
+    val selectedTable = tables.find { it.id == selectedTableId }
+    val isGuest = role == RoleViewModel.Role.GUEST
+
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         if (isTablet) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TableListPane(
                     tables = tables, selectedTableId = selectedTableId, zones = zones,
                     isStaff = role == RoleViewModel.Role.STAFF,
-                    onSelectTable = { table ->
-                        tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id)
-                    },
+                    onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id) },
                     onAddTable = { name -> tableViewModel.addTable(name) },
-                    onSwitchRole = onSwitchRole,
                     modifier = Modifier.width(260.dp).fillMaxHeight()
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp), color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
@@ -80,14 +91,22 @@ fun MainScreen(
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Row(modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp)) {
-                        Text("☰", modifier = Modifier
-                            .clickable { tableListVisible = !tableListVisible }
-                            .padding(8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineMedium)
-                        Spacer(modifier = Modifier.weight(1f))
-                        Text("⚙", modifier = Modifier
-                            .clickable { onOpenSettings() }
-                            .padding(8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineMedium)
+                    Row(modifier = Modifier
+                        .fillMaxWidth().height(48.dp)
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp)
+                    ) {
+                        val tableBtn = if (isGuest && selectedTable != null)
+                            toChineseTableName(selectedTable.name) else "☰"
+                        Text(tableBtn,
+                            modifier = Modifier.clickable { tableListVisible = !tableListVisible }.padding(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.headlineMedium)
+                        Spacer(Modifier.weight(1f))
+                        Text("⚙",
+                            modifier = Modifier.clickable { onOpenSettings() }.padding(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.headlineMedium)
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
                     ContentArea(menuItems, currentOrder, totalPrice, selectedTableId, role, menuViewModel, orderViewModel)
@@ -98,7 +117,7 @@ fun MainScreen(
                     exit = slideOutHorizontally(targetOffsetX = { -it }),
                     modifier = Modifier.zIndex(1f)
                 ) {
-                    Row {
+                    Row(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
                         TableListPane(
                             tables = tables, selectedTableId = selectedTableId, zones = zones,
                             isStaff = role == RoleViewModel.Role.STAFF,
@@ -107,29 +126,21 @@ fun MainScreen(
                                 tableListVisible = false
                             },
                             onAddTable = { name -> tableViewModel.addTable(name) },
-                            onSwitchRole = onSwitchRole,
                             modifier = Modifier.width(260.dp).fillMaxHeight()
                         )
                         HorizontalDivider(Modifier.fillMaxHeight().width(1.dp), color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
                     }
                 }
                 if (tableListVisible) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .zIndex(0f)
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { tableListVisible = false }
-                    )
+                    Box(Modifier.fillMaxSize().zIndex(0f)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { tableListVisible = false })
                 }
             }
         }
     }
 
     if (sheetVisible) {
-        RecipeSheet(
-            item = selectedMenuItem, steps = recipeSteps, ingredients = recipeIngredients,
-            onDismiss = { menuViewModel.dismissSheet() }
-        )
+        RecipeSheet(item = selectedMenuItem, steps = recipeSteps, ingredients = recipeIngredients, onDismiss = { menuViewModel.dismissSheet() })
     }
 }
 
@@ -149,9 +160,7 @@ private fun ContentArea(
             OrderPane(
                 orderItems = order.items, totalPrice = totalPrice, menuItems = menuItems,
                 isStaff = role == RoleViewModel.Role.STAFF,
-                onAddItem = { menuId, name, price ->
-                    selectedTableId?.let { tableId -> orderViewModel.addItem(tableId, menuId, name, price) }
-                },
+                onAddItem = { menuId, name, price -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, menuId, name, price) } },
                 onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
                 onSettle = { orderViewModel.settleOrder() },
                 onSelectMenuItem = { if (it.hasRecipe) menuViewModel.selectItem(it) }
@@ -160,7 +169,7 @@ private fun ContentArea(
             MenuPane(
                 menuItems = menuItems, isStaff = role == RoleViewModel.Role.STAFF,
                 onItemClick = { if (it.hasRecipe) menuViewModel.selectItem(it) },
-                onAddToOrder = { selectedTableId?.let { tableId -> orderViewModel.addItem(tableId, it.id, it.name, it.price) } }
+                onAddToOrder = { item -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) } }
             )
         }
     }
