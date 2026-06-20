@@ -1,15 +1,28 @@
 package com.opp.oder.ui
 
 import android.net.nsd.NsdServiceInfo
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opp.oder.OderApp
 import com.opp.oder.data.repository.MenuRepository
@@ -34,14 +47,39 @@ enum class NavScreen {
 @Composable
 fun OderAppContent() {
     val app = LocalContext.current.applicationContext as OderApp
-    val db = app.database
+    val db by app.dbState.collectAsStateWithLifecycle()
+
+    val currentDb = db
+    if (currentDb == null) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Oder++",
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "正在加载...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+        return
+    }
+    val safeDb = currentDb
 
     val roleViewModel: RoleViewModel = viewModel()
     val hostViewModel: HostViewModel = viewModel()
 
-    val tableRepository = remember { TableRepository(db.tableDao()) }
-    val menuRepository = remember { MenuRepository(db.menuItemDao(), db.recipeDao()) }
-    val orderRepository = remember { OrderRepository(db.orderDao()) }
+    val tableRepository = remember { TableRepository(safeDb.tableDao()) }
+    val menuRepository = remember { MenuRepository(safeDb.menuItemDao(), safeDb.recipeDao()) }
+    val orderRepository = remember { OrderRepository(safeDb.orderDao()) }
 
     val tableViewModel: TableViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
@@ -89,7 +127,7 @@ fun OderAppContent() {
                 viewModel = hostViewModel,
                 discoveredHosts = discoveredHosts,
                 onStartHost = {
-                    val server = HostServer(db)
+                    val server = HostServer(safeDb)
                     hostViewModel.setHostMode(server, discoveryService)
                     currentScreen = NavScreen.MAIN
                 },
