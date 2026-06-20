@@ -280,6 +280,33 @@ object PresetRecipes {
         val steps: List<String>
     )
 
+    fun getInsertSqlList(): List<String> {
+        val list = mutableListOf<String>()
+        cocktails.forEachIndexed { index, c ->
+            val menuId = index + 1L
+            list.add("INSERT OR IGNORE INTO menu_items(id, name, price, category, hasRecipe) VALUES ($menuId, '${c.name.replace("'", "''")}', ${c.price}, '${c.category}', 1)")
+            c.steps.forEachIndexed { i, step ->
+                list.add("INSERT OR IGNORE INTO recipe_steps(menuItemId, stepNumber, description) VALUES ($menuId, ${i + 1}, '${step.replace("'", "''")}')")
+            }
+            c.ingredients.forEach { (name, amount) ->
+                val parts = amount.split(Regex("[（(]"))
+                val amt = parts[0]
+                val unit = if (parts.size > 1) parts[1].replace(Regex("[）)]"), "") else ""
+                list.add("INSERT OR IGNORE INTO recipe_ingredients(menuItemId, name, amount, unit) VALUES ($menuId, '${name.replace("'", "''")}', '${amt}', '${unit}')")
+            }
+        }
+        var id = cocktails.size + 1L
+        defaultDrinks.forEach { (name, cat, price) ->
+            list.add("INSERT OR IGNORE INTO menu_items(id, name, price, category, hasRecipe) VALUES ($id, '${name.replace("'", "''")}', $price, '$cat', 0)")
+            id++
+        }
+        defaultSnacks.forEach { (name, cat, price) ->
+            list.add("INSERT OR IGNORE INTO menu_items(id, name, price, category, hasRecipe) VALUES ($id, '${name.replace("'", "''")}', $price, '$cat', 0)")
+            id++
+        }
+        return list
+    }
+
     fun getInsertSql(): String {
         val sb = StringBuilder()
         cocktails.forEachIndexed { index, c ->

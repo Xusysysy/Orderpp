@@ -48,7 +48,14 @@ abstract class AppDatabase : RoomDatabase() {
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                             super.onCreate(db)
-                            db.execSQL(PresetRecipes.getFullInsertSql())
+                            val sqls = PresetRecipes.getInsertSqlList()
+                            db.beginTransaction()
+                            try {
+                                sqls.forEach { db.execSQL(it) }
+                                db.setTransactionSuccessful()
+                            } finally {
+                                db.endTransaction()
+                            }
                         }
                     })
                     .build()
