@@ -6,8 +6,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -20,10 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.opp.oder.DbState
 import com.opp.oder.OderApp
 import com.opp.oder.data.repository.MenuRepository
 import com.opp.oder.data.repository.OrderRepository
@@ -34,6 +44,7 @@ import com.opp.oder.network.SyncClient
 import com.opp.oder.ui.screen.HostSetupScreen
 import com.opp.oder.ui.screen.RoleSelectScreen
 import com.opp.oder.ui.screen.main.MainScreen
+import com.opp.oder.util.LogWriter
 import com.opp.oder.viewmodel.HostViewModel
 import com.opp.oder.viewmodel.MenuViewModel
 import com.opp.oder.viewmodel.OrderViewModel
@@ -47,39 +58,81 @@ enum class NavScreen {
 @Composable
 fun OderAppContent() {
     val app = LocalContext.current.applicationContext as OderApp
-    val db by app.dbState.collectAsStateWithLifecycle()
+    val state by app.dbState.collectAsStateWithLifecycle()
 
-    val currentDb = db
-    if (currentDb == null) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Oder++",
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "正在加载...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                    )
-                }
+    when (val s = state) {
+        is DbState.Loading -> LoadingScreen()
+        is DbState.Error -> ErrorScreen(s.message)
+        is DbState.Ready -> {
+            val safeDb = s.db
+            MainApp(safeDb, app)
+        }
+    }
+}
+
+@Composable
+private fun LoadingScreen() {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF121212)) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Oder++", color = Color(0xFFFFB300), fontSize = 28.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator(color = Color(0xFFFFB300))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("正在加载...", color = Color.Gray, fontSize = 14.sp)
             }
         }
-        return
     }
-    val safeDb = currentDb
+}
 
+@Composable
+private fun ErrorScreen(message: String) {
+    val ctx = LocalContext.current
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF121212)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(48.dp))
+            Text("Oder++", color = Color(0xFFFFB300), fontSize = 28.sp)
+            Text("初始化失败", color = Color(0xFFEF5350), fontSize = 20.sp)
+
+            Text(
+                text = message,
+                color = Color(0xFFE0E0E0),
+                fontSize = 13.sp,
+                fontFamily = FontFamily.Monospace
+            )
+
+            val logText = remember { LogWriter.read() }
+            Text(
+                text = logText,
+                color = Color(0xFF9E9E9E),
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            val logPath = "${ctx.filesDir.absolutePath}/oder_log.txt"
+            Text(
+                text = "日志路径: $logPath",
+                color = Color(0xFF4CAF50),
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun MainApp(db: com.opp.oder.data.db.AppDatabase, app: OderApp) {
     val roleViewModel: RoleViewModel = viewModel()
     val hostViewModel: HostViewModel = viewModel()
 
-    val tableRepository = remember { TableRepository(safeDb.tableDao()) }
-    val menuRepository = remember { MenuRepository(safeDb.menuItemDao(), safeDb.recipeDao()) }
-    val orderRepository = remember { OrderRepository(safeDb.orderDao()) }
+    val tableRepository = remember { TableRepository(db.tableDao()) }
+    val menuRepository = remember { MenuRepository(db.menuItemDao(), db.recipeDao()) }
+    val orderRepository = remember { OrderRepository(db.orderDao()) }
 
     val tableViewModel: TableViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
@@ -127,7 +180,7 @@ fun OderAppContent() {
                 viewModel = hostViewModel,
                 discoveredHosts = discoveredHosts,
                 onStartHost = {
-                    val server = HostServer(safeDb)
+                    val server = HostServer(db)
                     hostViewModel.setHostMode(server, discoveryService)
                     currentScreen = NavScreen.MAIN
                 },
