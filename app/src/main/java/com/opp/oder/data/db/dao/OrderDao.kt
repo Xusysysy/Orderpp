@@ -12,6 +12,17 @@ data class OrderWithItems(
     val items: List<OrderItemEntity>
 )
 
+data class OrderBill(
+    val orderId: Long,
+    val tableId: Long,
+    val tableName: String,
+    val status: String,
+    val createdAt: Long,
+    val items: List<OrderItemEntity>,
+    val itemCount: Int,
+    val totalPrice: Double
+)
+
 class OrderDao(private val helper: DatabaseHelper) {
     suspend fun getActiveOrder(tableId: Long): OrderEntity? = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
@@ -31,6 +42,28 @@ class OrderDao(private val helper: DatabaseHelper) {
         val list = mutableListOf<OrderEntity>()
         while (c.moveToNext()) {
             list.add(OrderEntity(c.getLong(0), c.getLong(1), c.getString(2), c.getLong(3)))
+        }
+        c.close()
+        list
+    }
+
+    suspend fun getAllOrderBills(): List<OrderBill> = withContext(Dispatchers.IO) {
+        val db = helper.readableDatabase
+        val c = db.rawQuery(
+            "SELECT o.id, o.tableId, t.name, o.status, o.createdAt FROM orders o JOIN tables t ON o.tableId = t.id ORDER BY o.createdAt DESC",
+            null
+        )
+        val list = mutableListOf<OrderBill>()
+        while (c.moveToNext()) {
+            val orderId = c.getLong(0)
+            val tableId = c.getLong(1)
+            val tableName = c.getString(2)
+            val status = c.getString(3)
+            val createdAt = c.getLong(4)
+            val items = getItems(orderId, db)
+            val itemCount = items.sumOf { it.quantity }
+            val totalPrice = items.sumOf { it.price * it.quantity }
+            list.add(OrderBill(orderId, tableId, tableName, status, createdAt, items, itemCount, totalPrice))
         }
         c.close()
         list

@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,6 +42,8 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -80,6 +83,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import com.opp.oder.data.db.dao.OrderBill
 import com.opp.oder.data.db.entity.MenuItemEntity
 import com.opp.oder.data.db.entity.OrderItemEntity
 import com.opp.oder.data.db.entity.TableEntity
@@ -123,6 +127,8 @@ fun MainScreen(
     val recipeIngredients by menuViewModel.recipeIngredients.collectAsStateWithLifecycle()
     val sheetVisible by menuViewModel.sheetVisible.collectAsStateWithLifecycle()
     val role by roleViewModel.role.collectAsStateWithLifecycle()
+    val allOrders by orderViewModel.allOrders.collectAsStateWithLifecycle()
+    val selectedBillId by orderViewModel.selectedBillId.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableStateOf(Tab.MENU) }
     var showTableDrawer by remember { mutableStateOf(false) }
@@ -159,6 +165,12 @@ fun MainScreen(
     LaunchedEffect(role, selectedTableId) {
         if (!isStaff && selectedTableId == null) {
             showTableDrawer = true
+        }
+    }
+
+    LaunchedEffect(selectedTab, isStaff) {
+        if (isStaff && selectedTab == Tab.BILL) {
+            orderViewModel.loadAllOrders()
         }
     }
 
@@ -298,27 +310,27 @@ fun MainScreen(
                             orderQuantities = orderQuantities,
                             orderItemMap = orderItemMap,
                             totalItemCount = totalItemCount,
-                            onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
                             onShowTableDrawer = { showTableDrawer = true },
                             onItemClick = { if (it.hasRecipe) menuViewModel.selectItem(it) },
                             onAddToOrder = { item -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) } },
                             onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
-                            onSettle = { orderViewModel.settleOrder() },
                             onGuestAdd = { item, x, y -> handleGuestAdd(item, x, y) },
                             onSwitchToBill = { selectedTab = Tab.BILL }
                         )
-                        Tab.BILL -> BillTabContent(
-                            currentOrder = currentOrder,
-                            totalPrice = totalPrice,
-                            menuItems = menuItems,
-                            isStaff = isStaff,
-                            selectedTableId = selectedTableId,
-                            selectedTableName = selectedTable?.name,
-                            onAddItem = { menuId, name, price -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, menuId, name, price) } },
-                            onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
-                            onSettle = { orderViewModel.settleOrder() },
-                            onSelectMenuItem = { if (it.hasRecipe) menuViewModel.selectItem(it) }
-                        )
+                        Tab.BILL -> if (isStaff) {
+                            StaffBillContent(
+                                allOrders = allOrders,
+                                selectedBillId = selectedBillId,
+                                onSelectBill = { orderViewModel.selectBill(it) },
+                                onSettleBill = { orderViewModel.settleBill(it) }
+                            )
+                        } else {
+                            BillTabContent(
+                                currentOrder = currentOrder,
+                                totalPrice = totalPrice,
+                                onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) }
+                            )
+                        }
                         Tab.MY -> MyTabContent(
                             role = role,
                             onOpenSettings = { showSettings = true }
@@ -493,12 +505,10 @@ private fun MenuTabContent(
     orderQuantities: Map<Long, Int>,
     orderItemMap: Map<Long, OrderItemEntity>,
     totalItemCount: Int,
-    onSelectTable: (TableEntity) -> Unit,
     onShowTableDrawer: () -> Unit,
     onItemClick: (MenuItemEntity) -> Unit,
     onAddToOrder: (MenuItemEntity) -> Unit,
     onUpdateQuantity: (OrderItemEntity, Int) -> Unit,
-    onSettle: () -> Unit,
     onGuestAdd: (MenuItemEntity, Int, Int) -> Unit,
     onSwitchToBill: () -> Unit
 ) {
@@ -506,53 +516,59 @@ private fun MenuTabContent(
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "") }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val tableLabel = if (selectedTable != null) selectedTable.name else "选择桌位 ▸"
-            Text(
-                text = tableLabel,
-                modifier = Modifier
-                    .clickable { onShowTableDrawer() }
-                    .background(
-                        MaterialTheme.colorScheme.surface,
-                        shape = MaterialTheme.shapes.small
-                    )
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.weight(1f))
-            if (selectedTableId != null && isStaff) {
-                Text("¥%.0f".format(totalPrice),
+        if (isStaff) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "桌位",
+                    modifier = Modifier
+                        .clickable { onShowTableDrawer() }
+                        .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary)
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val tableLabel = if (selectedTable != null) selectedTable.name else "选择桌位 ▸"
+                Text(
+                    text = tableLabel,
+                    modifier = Modifier
+                        .clickable { onShowTableDrawer() }
+                        .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.weight(1f))
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
         }
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
-
-        if (selectedTableId != null) {
+        if (!isStaff && selectedTableId == null) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("请先选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+            }
+        } else {
             val order = currentOrder
-            if (isStaff && order != null && order.items.isNotEmpty()) {
+            if (!isStaff && order != null && order.items.isNotEmpty()) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("当前订单", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
-                        if (!isStaff) {
-                            TextButton(onClick = onSwitchToBill) {
-                                Text("查看账单 ▸", color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
+                        Text("¥%.0f".format(totalPrice), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                     }
                     LazyColumn(
                         modifier = Modifier.weight(1f),
@@ -568,36 +584,22 @@ private fun MenuTabContent(
                                     Text(item.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                                     Text("¥%.0f x ${item.quantity}".format(item.price), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                 }
-                                if (isStaff) {
-                                    QuantityStepper(quantity = item.quantity, onIncrement = { onUpdateQuantity(item, 1) }, onDecrement = { onUpdateQuantity(item, -1) })
-                                } else {
-                                    Text("x${item.quantity}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                                }
+                                Text("x${item.quantity}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                             }
                             HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
                         }
-                    }
-                    if (isStaff) {
-                        Button(
-                            onClick = onSettle,
-                            modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp, vertical = 8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) { Text("结账", style = MaterialTheme.typography.titleMedium) }
                     }
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (!isStaff && totalItemCount > 0) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("已点 ${totalItemCount} 件 · ¥%.0f".format(totalPrice),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary)
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                             TextButton(onClick = onSwitchToBill) {
                                 Text("查看账单 ▸", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             }
@@ -634,8 +636,12 @@ private fun MenuTabContent(
                                 MenuCard(
                                     item = item,
                                     onClick = {
-                                        if (isStaff) onAddToOrder(item)
-                                        onItemClick(item)
+                                        if (isStaff) {
+                                            onItemClick(item)
+                                        } else {
+                                            onAddToOrder(item)
+                                            onItemClick(item)
+                                        }
                                     },
                                     showAddButton = !isStaff,
                                     orderQuantity = orderQuantities[item.id] ?: 0,
@@ -651,10 +657,6 @@ private fun MenuTabContent(
                     }
                 }
             }
-        } else {
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text("请先选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
-            }
         }
     }
 }
@@ -663,14 +665,7 @@ private fun MenuTabContent(
 private fun BillTabContent(
     currentOrder: com.opp.oder.data.db.dao.OrderWithItems?,
     totalPrice: Double,
-    menuItems: List<MenuItemEntity>,
-    isStaff: Boolean,
-    selectedTableId: Long?,
-    selectedTableName: String?,
-    onAddItem: (Long, String, Double) -> Unit,
-    onUpdateQuantity: (OrderItemEntity, Int) -> Unit,
-    onSettle: () -> Unit,
-    onSelectMenuItem: (MenuItemEntity) -> Unit
+    onUpdateQuantity: (OrderItemEntity, Int) -> Unit
 ) {
     val order = currentOrder
     if (order != null && order.items.isNotEmpty()) {
@@ -680,12 +675,7 @@ private fun BillTabContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("当前订单", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                    if (selectedTableName != null) {
-                        Text(selectedTableName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
-                    }
-                }
+                Text("当前订单", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
                 Text("合计: ¥%.0f".format(totalPrice), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
             }
             Spacer(Modifier.height(12.dp))
@@ -701,14 +691,6 @@ private fun BillTabContent(
                     HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
                 }
             }
-            if (isStaff) {
-                Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = onSettle,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) { Text("结账", style = MaterialTheme.typography.titleMedium) }
-            }
         }
     } else {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -716,6 +698,129 @@ private fun BillTabContent(
                 Text("暂无订单", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
                 Spacer(Modifier.height(8.dp))
                 Text("请先在菜单中选择桌位并添加商品", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StaffBillContent(
+    allOrders: List<com.opp.oder.data.db.dao.OrderBill>,
+    selectedBillId: Long?,
+    onSelectBill: (Long) -> Unit,
+    onSettleBill: (Long) -> Unit
+) {
+    if (allOrders.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("暂无订单", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                Spacer(Modifier.height(8.dp))
+                Text("客人下单后将在此显示", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f))
+            }
+        }
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(allOrders) { bill ->
+                    val isSelected = bill.orderId == selectedBillId
+                    val isSettled = bill.status == "SETTLED"
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (isSettled) Modifier
+                                else Modifier.clickable { onSelectBill(bill.orderId) }
+                            ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = when {
+                                isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+                        ),
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = bill.tableName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isSettled) "已结账" else "进行中",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                            else MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${bill.itemCount} 件商品",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                            else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "¥%.0f".format(bill.totalPrice),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                            else MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            if (isSelected && !isSettled) {
+                                Spacer(Modifier.height(8.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+                                Spacer(Modifier.height(8.dp))
+                                bill.items.forEach { item ->
+                                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                        Text(
+                                            text = item.name,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "x${item.quantity}  ¥%.0f".format(item.price * item.quantity),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                item { Spacer(Modifier.height(80.dp)) }
+            }
+
+            if (selectedBillId != null) {
+                Button(
+                    onClick = { onSettleBill(selectedBillId) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .align(Alignment.BottomCenter),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text("结账 ¥%.0f".format(allOrders.find { it.orderId == selectedBillId }?.totalPrice ?: 0.0),
+                        style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }

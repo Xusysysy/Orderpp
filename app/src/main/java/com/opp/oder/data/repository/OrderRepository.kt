@@ -1,6 +1,7 @@
 package com.opp.oder.data.repository
 
 import com.opp.oder.data.db.dao.OrderDao
+import com.opp.oder.data.db.dao.OrderBill
 import com.opp.oder.data.db.dao.OrderWithItems
 import com.opp.oder.data.db.entity.OrderEntity
 import com.opp.oder.data.db.entity.OrderItemEntity
@@ -39,4 +40,6 @@ class OrderRepository(private val dao: OrderDao) {
     suspend fun removeItem(id: Long) = dao.deleteItem(id)
 
     suspend fun getItems(orderId: Long): List<OrderItemEntity> = dao.getItems(orderId)
+
+    suspend fun getAllOrderBills(): List<OrderBill> = dao.getAllOrderBills()
 }

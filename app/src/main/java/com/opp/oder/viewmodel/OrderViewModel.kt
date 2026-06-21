@@ -3,6 +3,7 @@ package com.opp.oder.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opp.oder.data.repository.OrderRepository
+import com.opp.oder.data.db.dao.OrderBill
 import com.opp.oder.data.db.dao.OrderWithItems
 import com.opp.oder.data.db.entity.OrderEntity
 import com.opp.oder.data.db.entity.OrderItemEntity
@@ -19,6 +20,12 @@ class OrderViewModel(
 
     private val _totalPrice = MutableStateFlow(0.0)
     val totalPrice: StateFlow<Double> = _totalPrice
+
+    private val _allOrders = MutableStateFlow<List<OrderBill>>(emptyList())
+    val allOrders: StateFlow<List<OrderBill>> = _allOrders
+
+    private val _selectedBillId = MutableStateFlow<Long?>(null)
+    val selectedBillId: StateFlow<Long?> = _selectedBillId
 
     fun loadOrder(tableId: Long) {
         viewModelScope.launch {
@@ -70,6 +77,28 @@ class OrderViewModel(
                 _currentOrder.value = null
                 _totalPrice.value = 0.0
             }
+        }
+    }
+
+    fun loadAllOrders() {
+        viewModelScope.launch {
+            _allOrders.value = repository.getAllOrderBills()
+            _selectedBillId.value = null
+        }
+    }
+
+    fun selectBill(orderId: Long) {
+        if (_selectedBillId.value == orderId) {
+            _selectedBillId.value = null
+        } else {
+            _selectedBillId.value = orderId
+        }
+    }
+
+    fun settleBill(orderId: Long) {
+        viewModelScope.launch {
+            repository.updateOrderStatus(orderId, OrderEntity.STATUS_SETTLED)
+            loadAllOrders()
         }
     }
 
