@@ -66,7 +66,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## 5. APK Location After Build
 
-**After every successful `assembleDebug` build, output the APK path:**
+**After every successful build, output the APK path. Default to debug build (`assembleDebug`). Only use release build (`assembleRelease`) when the user explicitly requests it.**
 
 ```
 喵APK 位置: app\build\outputs\apk\debug\app-debug.apk
