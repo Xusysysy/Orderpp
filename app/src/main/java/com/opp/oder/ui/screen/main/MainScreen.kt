@@ -92,14 +92,7 @@ import com.opp.oder.viewmodel.RoleViewModel
 import com.opp.oder.viewmodel.TableViewModel
 import kotlin.math.roundToInt
 
-private val CN_NUMS = listOf("零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
-    "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
-    "二十一", "二十二", "二十三", "二十四", "二十五", "二十六", "二十七", "二十八", "二十九", "三十")
 
-fun toChineseTableName(name: String): String {
-    val num = name.replace(Regex("[^0-9]"), "").toIntOrNull() ?: return name
-    return if (num in 1..CN_NUMS.lastIndex) CN_NUMS[num] + "号桌" else name
-}
 
 private enum class Tab { MENU, BILL, MY }
 
@@ -169,39 +162,52 @@ fun MainScreen(
         menuViewModel.dismissSheet()
     }
 
-    if (showSettings) {
-        SettingsPage(
-            isDark = isDark,
-            onToggleTheme = onToggleTheme,
-            role = role,
-            roleViewModel = roleViewModel,
-            hostViewModel = hostViewModel,
-            discoveredHosts = discoveredHosts,
-            onStartHost = { onStartHost(); showSettings = false },
-            onConnectToHost = { ip -> onConnectToHost(ip); showSettings = false },
-            showPinDialog = showPinDialog,
-            pinInput = pinInput,
-            pinError = pinError,
-            onRequestStaffMode = { showPinDialog = true },
-            onRequestGuestMode = {
-                roleViewModel.selectRole(RoleViewModel.Role.GUEST)
-                showSettings = false
-            },
-            onDismissPinDialog = {
-                showPinDialog = false; pinInput = ""; roleViewModel.resetPinError()
-            },
-            onPinInputChange = { pinInput = it.take(4); roleViewModel.resetPinError() },
-            onConfirmPin = {
-                if (roleViewModel.verifyPin(pinInput)) {
-                    roleViewModel.selectRole(RoleViewModel.Role.STAFF)
-                    showPinDialog = false
-                    pinInput = ""
+    AnimatedContent(
+        targetState = showSettings,
+        transitionSpec = {
+            if (targetState) {
+                (slideInHorizontally(tween(300)) { it } + fadeIn(tween(200))) togetherWith
+                        (slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(200)))
+            } else {
+                (slideInHorizontally(tween(300)) { -it } + fadeIn(tween(200))) togetherWith
+                        (slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200)))
+            }
+        },
+        label = "settings_transition"
+    ) { inSettings ->
+        if (inSettings) {
+            SettingsPage(
+                isDark = isDark,
+                onToggleTheme = onToggleTheme,
+                role = role,
+                roleViewModel = roleViewModel,
+                hostViewModel = hostViewModel,
+                discoveredHosts = discoveredHosts,
+                onStartHost = { onStartHost(); showSettings = false },
+                onConnectToHost = { ip -> onConnectToHost(ip); showSettings = false },
+                showPinDialog = showPinDialog,
+                pinInput = pinInput,
+                pinError = pinError,
+                onRequestStaffMode = { showPinDialog = true },
+                onRequestGuestMode = {
+                    roleViewModel.selectRole(RoleViewModel.Role.GUEST)
                     showSettings = false
-                }
-            },
-            onBack = { showSettings = false }
-        )
-    } else {
+                },
+                onDismissPinDialog = {
+                    showPinDialog = false; pinInput = ""; roleViewModel.resetPinError()
+                },
+                onPinInputChange = { pinInput = it.take(4); roleViewModel.resetPinError() },
+                onConfirmPin = {
+                    if (roleViewModel.verifyPin(pinInput)) {
+                        roleViewModel.selectRole(RoleViewModel.Role.STAFF)
+                        showPinDialog = false
+                        pinInput = ""
+                        showSettings = false
+                    }
+                },
+                onBack = { showSettings = false }
+            )
+        } else {
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 modifier = modifier,
@@ -265,8 +271,9 @@ fun MainScreen(
                 AnimatedContent(
                     targetState = selectedTab,
                     transitionSpec = {
-                        slideInHorizontally(tween(300)) { it } + fadeIn(tween(200)) togetherWith
-                                slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(200))
+                        val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                        (slideInHorizontally(tween(300)) { it * dir } + fadeIn(tween(200))) togetherWith
+                                (slideOutHorizontally(tween(300)) { -it * dir } + fadeOut(tween(200)))
                     },
                     modifier = Modifier.padding(innerPadding),
                     label = "tab_transition"
@@ -356,6 +363,7 @@ fun MainScreen(
             }
         }
     }
+    }
 
     if (sheetVisible) {
         RecipeSheet(
@@ -432,9 +440,10 @@ private fun TableDrawer(
                             if (isStaff) {
                                 TextButton(onClick = { onDeleteTable(table); if (table.id == selectedTableId) onDismiss() }) {
                                     Text("删除", color = MaterialTheme.colorScheme.error)
-                                }
-                            }
-                        }
+            }
+        }
+    }
+
                         Spacer(Modifier.height(2.dp))
                     }
                 }
@@ -495,7 +504,7 @@ private fun MenuTabContent(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val tableLabel = if (selectedTable != null) toChineseTableName(selectedTable.name) else "选择桌位 ▸"
+            val tableLabel = if (selectedTable != null) selectedTable.name else "选择桌位 ▸"
             Text(
                 text = tableLabel,
                 modifier = Modifier
@@ -521,7 +530,7 @@ private fun MenuTabContent(
 
         if (selectedTableId != null) {
             val order = currentOrder
-            if (order != null && order.items.isNotEmpty()) {
+            if (isStaff && order != null && order.items.isNotEmpty()) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier
@@ -570,6 +579,22 @@ private fun MenuTabContent(
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
+                    if (!isStaff && totalItemCount > 0) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("已点 ${totalItemCount} 件 · ¥%.0f".format(totalPrice),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                            TextButton(onClick = onSwitchToBill) {
+                                Text("查看账单 ▸", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
                     LazyRow(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -772,7 +797,7 @@ private fun SettingsPage(
             TopAppBar(
                 title = { Text("设置", color = MaterialTheme.colorScheme.onBackground) },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("← 返回", color = MaterialTheme.colorScheme.primary) }
+                    TextButton(onClick = onBack) { Text("←", color = MaterialTheme.colorScheme.primary, fontSize = 20.sp) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
