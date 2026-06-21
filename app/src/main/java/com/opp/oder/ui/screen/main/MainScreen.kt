@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -642,27 +643,6 @@ private fun SettingsPage(
         ) {
             Spacer(Modifier.height(8.dp))
 
-            Text("模式切换", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(Modifier.height(8.dp))
-
-            Button(
-                onClick = onRequestStaffMode,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = role != RoleViewModel.Role.STAFF,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) { Text("进入员工模式", style = MaterialTheme.typography.titleMedium) }
-
-            Spacer(Modifier.height(8.dp))
-
-            Button(
-                onClick = onRequestGuestMode,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = role != RoleViewModel.Role.GUEST,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) { Text("进入客人模式", style = MaterialTheme.typography.titleMedium) }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
             Text("外观", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -721,7 +701,46 @@ private fun SettingsPage(
                     }
                 }
             }
-            Spacer(Modifier.height(32.dp))
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            Text("模式切换", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.height(8.dp))
+
+            if (role == RoleViewModel.Role.GUEST) {
+                Button(
+                    onClick = onRequestStaffMode,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) { Text("进入员工模式", style = MaterialTheme.typography.titleMedium) }
+            } else {
+                Button(
+                    onClick = onRequestGuestMode,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) { Text("进入客人模式", style = MaterialTheme.typography.titleMedium) }
+            }
+
+            Spacer(Modifier.height(40.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+            Spacer(Modifier.height(16.dp))
+            Text("Oder++ v1.0.0",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text("Copyright © 2026 Linxc",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center)
+            Spacer(Modifier.height(2.dp))
+            Text("MIT License",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center)
+            Spacer(Modifier.height(24.dp))
         }
     }
 
