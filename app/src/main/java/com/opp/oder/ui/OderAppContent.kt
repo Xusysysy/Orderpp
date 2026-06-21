@@ -1,5 +1,6 @@
 package com.opp.oder.ui
 
+import android.content.Context
 import android.net.nsd.NsdServiceInfo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -102,9 +103,16 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
     var isDark by remember { mutableStateOf(true) }
 
     OderTheme(darkTheme = isDark) {
+        val prefs = remember { app.getSharedPreferences("oder_prefs", Context.MODE_PRIVATE) }
         val roleViewModel: RoleViewModel = viewModel()
-        if (roleViewModel.role.value == RoleViewModel.Role.NONE) {
-            roleViewModel.selectRole(RoleViewModel.Role.GUEST)
+
+        LaunchedEffect(Unit) {
+            val savedRole = prefs.getString("app_role", null)
+            if (savedRole != null) {
+                try { roleViewModel.selectRole(RoleViewModel.Role.valueOf(savedRole)) } catch (_: Exception) { roleViewModel.selectRole(RoleViewModel.Role.GUEST) }
+            } else if (roleViewModel.role.value == RoleViewModel.Role.NONE) {
+                roleViewModel.selectRole(RoleViewModel.Role.GUEST)
+            }
         }
         val hostViewModel: HostViewModel = viewModel()
         val tableDao = remember { com.opp.oder.data.db.dao.TableDao(helper) }
@@ -124,11 +132,54 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
         val discoveredHosts = remember { mutableStateListOf<NsdServiceInfo>() }
         val discoveryService = remember { DiscoveryService(app) }
         val role by roleViewModel.role.collectAsStateWithLifecycle()
+        var showConnectPrompt by remember { mutableStateOf(false) }
+        var promptedHostInfo by remember { mutableStateOf<NsdServiceInfo?>(null) }
+        var hasAutoPrompted by remember { mutableStateOf(false) }
+
+        hostViewModel.onSyncTables = { client ->
+            val apiTables = client.getTables()
+            tableRepository.updateAllFromApi(apiTables)
+            tableViewModel.reload()
+        }
+        hostViewModel.onSyncMenu = { client ->
+            val apiMenu = client.getMenu()
+            menuRepository.updateAllFromApi(apiMenu)
+            menuViewModel.loadMenuItems()
+        }
+        hostViewModel.onSyncPin = { pin ->
+            com.opp.oder.util.PinHelper.setPin(pin)
+        }
+
+        LaunchedEffect(role) {
+            prefs.edit().putString("app_role", role.name).apply()
+        }
+
+        LaunchedEffect(role) {
+            prefs.edit().putString("app_role", role.name).apply()
+        }
 
         LaunchedEffect(Unit) {
             discoveryService.startDiscovery()
             discoveryService.onHostDiscovered = { info ->
                 if (discoveredHosts.none { it.serviceName == info.serviceName }) discoveredHosts.add(info)
+                val currentRole = roleViewModel.role.value
+                if (currentRole == RoleViewModel.Role.GUEST) {
+                    val ip = info.host?.hostAddress
+                    if (ip != null) {
+                        val name = info.serviceName
+                        val knownHost = prefs.getString("known_host", null)
+                        if (knownHost == name) {
+                            val client = com.opp.oder.network.SyncClient(ip)
+                            hostViewModel.connectAndSync(ip, name, client, discoveryService)
+                        } else if (!hasAutoPrompted) {
+                            hasAutoPrompted = true
+                            promptedHostInfo = info
+                            showConnectPrompt = true
+                        }
+                    }
+                } else {
+                    hostViewModel.retryPendingOrders()
+                }
             }
         }
 
@@ -148,5 +199,28 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                 hostViewModel.setClientMode(ip, SyncClient(ip), discoveryService)
             }
         )
+
+        if (showConnectPrompt && promptedHostInfo != null) {
+            val info = promptedHostInfo!!
+            val ip = info.host?.hostAddress ?: ""
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showConnectPrompt = false },
+                title = { androidx.compose.material3.Text("发现主机") },
+                text = { androidx.compose.material3.Text("${info.serviceName} ($ip)\n是否连接并同步数据？") },
+                confirmButton = {
+                    androidx.compose.material3.Button(onClick = {
+                        showConnectPrompt = false
+                        prefs.edit().putString("known_host", info.serviceName).apply()
+                        val client = SyncClient(ip)
+                        hostViewModel.connectAndSync(ip, info.serviceName, client, discoveryService)
+                    }) { androidx.compose.material3.Text("连接") }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showConnectPrompt = false }) {
+                        androidx.compose.material3.Text("忽略")
+                    }
+                }
+            )
+        }
     }
 }

@@ -7,7 +7,7 @@
 ## 技术栈
 
 - **UI**: Jetpack Compose + Material3 + Bottom Navigation Bar
-- **数据库**: 原生 SQLiteOpenHelper（非 Room）
+- **数据库**: 原生 SQLiteOpenHelper（非 Room），版本 2（新增 sort_order 字段）
 - **网络**: Ktor CIO (嵌入式 HTTP Server) + NSD 局域网发现
 - **架构**: MVVM (ViewModel + Repository + DAO)
 - **最低 SDK**: 24，目标 SDK: 36
@@ -22,9 +22,9 @@ app/src/main/java/com/opp/oder/
 │
 ├── data/
 │   ├── db/
-│   │   ├── DatabaseHelper.kt     # SQLiteOpenHelper（自定义，非 Room）
+│   │   ├── DatabaseHelper.kt     # SQLiteOpenHelper v2 (新增 sort_order 列，带迁移)
 │   │   ├── entity/
-│   │   │   └── Entities.kt       # 所有数据实体 (TableEntity, MenuItemEntity, OrderEntity, OrderItemEntity, RecipeStepEntity, RecipeIngredientEntity)
+│   │   │   └── Entities.kt       # 所有数据实体 (含 sortOrder 字段)
 │   │   └── dao/
 │   │       ├── TableDao.kt       # 桌位 CRUD + getAllFlow()
 │   │       ├── MenuItemDao.kt    # 菜单 CRUD
@@ -59,7 +59,7 @@ app/src/main/java/com/opp/oder/
 │   │   ├── RoleSelectScreen.kt   # [已废弃] 角色选择页，现由设置页内模式按钮替代
 │   │   ├── HostSetupScreen.kt    # 局域网设置（Host/Client/发现列表）
 │   │   └── main/
-│   │       ├── MainScreen.kt     # 主界面：Scaffold + NavigationBar + 3Tab + 桌位抽屉 + 飞行动画 + 设置页
+│   │       ├── MainScreen.kt     # 主界面：Scaffold + NavigationBar + 3Tab + 桌位抽屉 + 飞行动画 + 设置页 + 返回手势拦截 + 拖拽排序（员工菜单/桌位）
 │   │       ├── TableListPane.kt  # [已废弃] 桌位列表由 MainScreen 内 TableDrawer 替代
 │   │       ├── MenuPane.kt       # [已废弃] 菜单网格由 MainScreen 内 MenuTabContent 替代
 │   │       ├── OrderPane.kt      # [已废弃] 订单详情由 MainScreen 内 BillTabContent 替代
@@ -95,16 +95,26 @@ App 启动 → 直接 MainScreen（默认客人模式）
 MainScreen 内部导航：
   Scaffold + NavigationBar (3 Tab 始终可见)
   ├── Tab.MENU → MenuTabContent
-  │     ├── 桌位按钮 → 左侧滑出 TableDrawer（选桌/增删桌位）
+  │     ├── 桌位按钮 → 左侧滑出 TableDrawer（选桌/增删/拖拽排序桌位）
+  │     ├── 员工：「排序」→ SortableMenuList（长按拖拽排序菜单项）
   │     ├── 分类 FilterChip → 菜单网格
-  │     └── 客人：加号按钮 → 飞行动画到账单按钮
+  │     └── 客人：顶部简略订单条 → 菜单网格（主要空间留给菜单）
   ├── Tab.BILL → BillTabContent（订单明细 + 结账）
   │     └── 账单按钮红圈 Badge（订单总数）
   ├── Tab.MY → MyTabContent（个人信息）
   │     └── 齿轮 ⚙ → SettingsPage（全屏设置页：主题/PIN/网络/模式切换/版权）
   └── RecipeSheet（ModalBottomSheet，点击菜单项配方时弹出）
         └── 客人：底部加号/数量控制器
+
+全局返回手势 (BackHandler)：
+  PIN对话框 → 桌位抽屉 → 配方弹窗 → 设置页 → 菜单Tab → 双击返回退出
 ```
+
+## 数据持久化
+
+- **桌位记住**: 客人首次选桌后保存到 SharedPreferences (`oder_prefs`)，下次启动自动恢复桌位号，不再反复弹出选择抽屉
+- **拖拽排序持久化**: 拖拽顺序通过 `sort_order` 字段写入 SQLite，菜单/桌位排序跨次启动保持
+- **数据库版本**: v1 → v2，`onUpgrade` 通过 ALTER TABLE 添加 `sort_order` 列，不丢失已有数据
 
 ## 关键配置
 

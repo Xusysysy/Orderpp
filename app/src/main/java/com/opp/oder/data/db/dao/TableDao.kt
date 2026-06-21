@@ -15,10 +15,10 @@ class TableDao(private val helper: DatabaseHelper) {
 
     suspend fun getAll(): List<TableEntity> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
-        val c = db.rawQuery("SELECT * FROM tables ORDER BY zone, name", null)
+        val c = db.rawQuery("SELECT * FROM tables ORDER BY sort_order, zone, name", null)
         val list = mutableListOf<TableEntity>()
         while (c.moveToNext()) {
-            list.add(TableEntity(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)))
+            list.add(TableEntity(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getInt(4)))
         }
         c.close()
         list
@@ -27,7 +27,7 @@ class TableDao(private val helper: DatabaseHelper) {
     suspend fun getById(id: Long): TableEntity? = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
         val c = db.rawQuery("SELECT * FROM tables WHERE id = ?", arrayOf(id.toString()))
-        val result = if (c.moveToFirst()) TableEntity(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)) else null
+        val result = if (c.moveToFirst()) TableEntity(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getInt(4)) else null
         c.close()
         result
     }
@@ -53,5 +53,28 @@ class TableDao(private val helper: DatabaseHelper) {
     suspend fun updateStatus(id: Long, status: String) = withContext(Dispatchers.IO) {
         val cv = ContentValues().apply { put("status", status) }
         helper.writableDatabase.update("tables", cv, "id = ?", arrayOf(id.toString()))
+    }
+
+    suspend fun updateSortOrders(ids: List<Long>) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        ids.forEachIndexed { index, id ->
+            val cv = ContentValues().apply { put("sort_order", index) }
+            db.update("tables", cv, "id = ?", arrayOf(id.toString()))
+        }
+    }
+
+    suspend fun syncFromApi(tables: List<com.opp.oder.network.ApiTable>) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        db.delete("tables", null, null)
+        tables.forEach { t ->
+            val cv = ContentValues().apply {
+                put("id", t.id)
+                put("name", t.name)
+                put("zone", t.zone)
+                put("status", t.status)
+                put("sort_order", 0)
+            }
+            db.insertWithOnConflict("tables", null, cv, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
+        }
     }
 }

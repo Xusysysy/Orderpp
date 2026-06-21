@@ -5,7 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(
-    context.applicationContext, "oder_database", null, 1
+    context.applicationContext, "oder_database", null, 2
 ) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
@@ -13,7 +13,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 zone TEXT DEFAULT '',
-                status TEXT DEFAULT 'IDLE'
+                status TEXT DEFAULT 'IDLE',
+                sort_order INTEGER DEFAULT 0
             )
         """)
         db.execSQL("""
@@ -22,7 +23,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(
                 name TEXT NOT NULL,
                 price REAL DEFAULT 0,
                 category TEXT DEFAULT 'cocktail',
-                hasRecipe INTEGER DEFAULT 0
+                hasRecipe INTEGER DEFAULT 0,
+                sort_order INTEGER DEFAULT 0
             )
         """)
         db.execSQL("""
@@ -63,12 +65,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS order_items")
-        db.execSQL("DROP TABLE IF EXISTS orders")
-        db.execSQL("DROP TABLE IF EXISTS recipe_ingredients")
-        db.execSQL("DROP TABLE IF EXISTS recipe_steps")
-        db.execSQL("DROP TABLE IF EXISTS menu_items")
-        db.execSQL("DROP TABLE IF EXISTS tables")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE menu_items ADD COLUMN sort_order INTEGER DEFAULT 0")
+            db.execSQL("ALTER TABLE tables ADD COLUMN sort_order INTEGER DEFAULT 0")
+        }
     }
 }

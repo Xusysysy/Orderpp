@@ -25,4 +25,10 @@ object PinHelper {
         prefs?.edit()?.putString(KEY_PIN, newPin)?.apply()
         return true
     }
+
+    fun setPin(pin: String) {
+        if (pin.length == 4) {
+            prefs?.edit()?.putString(KEY_PIN, pin)?.apply()
+        }
+    }
 }

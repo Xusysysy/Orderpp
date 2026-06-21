@@ -24,6 +24,10 @@ class MenuRepository(
 
     suspend fun delete(id: Long) = menuDao.deleteById(id)
 
+    suspend fun updateSortOrders(ids: List<Long>) = menuDao.updateSortOrders(ids)
+
+    suspend fun updateAllFromApi(items: List<com.opp.oder.network.ApiMenuItem>) = menuDao.syncFromApi(items)
+
     suspend fun getRecipeSteps(menuItemId: Long): List<RecipeStepEntity> =
         recipeDao.getSteps(menuItemId)
 

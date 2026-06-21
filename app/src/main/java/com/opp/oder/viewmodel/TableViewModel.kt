@@ -67,4 +67,15 @@ class TableViewModel(
             loadTables()
         }
     }
+
+    fun reorderTables(reordered: List<TableEntity>) {
+        _tables.value = reordered
+        viewModelScope.launch {
+            repository.updateSortOrders(reordered.map { it.id })
+        }
+    }
+
+    fun reload() {
+        loadTables()
+    }
 }

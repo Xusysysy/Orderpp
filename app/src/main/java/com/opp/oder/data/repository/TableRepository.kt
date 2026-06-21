@@ -26,4 +26,8 @@ class TableRepository(private val dao: TableDao) {
             }
         }
     }
+
+    suspend fun updateSortOrders(ids: List<Long>) = dao.updateSortOrders(ids)
+
+    suspend fun updateAllFromApi(tables: List<com.opp.oder.network.ApiTable>) = dao.syncFromApi(tables)
 }

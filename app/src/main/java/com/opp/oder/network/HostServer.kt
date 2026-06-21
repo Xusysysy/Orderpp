@@ -9,8 +9,10 @@ import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +37,21 @@ data class ApiRecipeStep(val id: Long, val menuItemId: Long, val stepNumber: Int
 
 @Serializable
 data class ApiRecipeIngredient(val id: Long, val menuItemId: Long, val name: String, val amount: String, val unit: String)
+
+@Serializable
+data class ApiOrderRequest(val tableId: Long, val items: List<ApiOrderItemRequest>)
+
+@Serializable
+data class ApiOrderItemRequest(val menuItemId: Long, val name: String, val quantity: Int, val price: Double)
+
+@Serializable
+data class ApiOrderResponse(val orderId: Long)
+
+@Serializable
+data class ApiPinResponse(val pin: String)
+
+@Serializable
+data class ApiPingResponse(val ok: Boolean)
 
 class HostServer(helper: DatabaseHelper) {
     private val tableDao = TableDao(helper)
@@ -77,6 +94,33 @@ class HostServer(helper: DatabaseHelper) {
                     val id = call.parameters["menuItemId"]?.toLongOrNull() ?: 0L
                     val ingredients = withContext(Dispatchers.IO) { recipeDao.getIngredients(id) }
                     call.respond(ingredients.map { ApiRecipeIngredient(it.id, it.menuItemId, it.name, it.amount, it.unit) })
+                }
+                get("/api/ping") {
+                    call.respond(ApiPingResponse(ok = true))
+                }
+                get("/api/pin") {
+                    val pin = com.opp.oder.util.PinHelper.currentPin
+                    call.respond(ApiPinResponse(pin = pin))
+                }
+                post("/api/orders") {
+                    val req = call.receive<ApiOrderRequest>()
+                    val orderId = withContext(Dispatchers.IO) {
+                        val orderDao = OrderDao(helper)
+                        val order = com.opp.oder.data.db.entity.OrderEntity(tableId = req.tableId)
+                        val id = orderDao.insertOrder(order)
+                        req.items.forEach { item ->
+                            val oi = com.opp.oder.data.db.entity.OrderItemEntity(
+                                orderId = id,
+                                menuItemId = item.menuItemId,
+                                name = item.name,
+                                quantity = item.quantity,
+                                price = item.price
+                            )
+                            orderDao.insertItem(oi)
+                        }
+                        id
+                    }
+                    call.respond(ApiOrderResponse(orderId = orderId))
                 }
             }
         }

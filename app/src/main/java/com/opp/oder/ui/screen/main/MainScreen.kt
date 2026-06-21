@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -100,6 +101,13 @@ import kotlin.math.roundToInt
 
 
 private enum class Tab { MENU, BILL, MY }
+
+private fun categoryLabel(category: String): String = when (category) {
+    MenuItemEntity.CATEGORY_COCKTAIL -> "调酒"
+    MenuItemEntity.CATEGORY_DRINK -> "饮料"
+    MenuItemEntity.CATEGORY_SNACK -> "小食"
+    else -> category
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,6 +173,8 @@ fun MainScreen(
     LaunchedEffect(role, selectedTableId) {
         if (!isStaff && selectedTableId == null) {
             showTableDrawer = true
+        } else if (isStaff) {
+            showTableDrawer = false
         }
     }
 
@@ -315,7 +325,10 @@ fun MainScreen(
                             onAddToOrder = { item -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) } },
                             onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
                             onGuestAdd = { item, x, y -> handleGuestAdd(item, x, y) },
-                            onSwitchToBill = { selectedTab = Tab.BILL }
+                            onSwitchToBill = { selectedTab = Tab.BILL },
+                            onAddMenuItem = { item -> menuViewModel.addItem(item) },
+                            onUpdateMenuItem = { item -> menuViewModel.updateItem(item) },
+                            onDeleteMenuItem = { id -> menuViewModel.deleteItem(id) }
                         )
                         Tab.BILL -> if (isStaff) {
                             StaffBillContent(
@@ -328,7 +341,15 @@ fun MainScreen(
                             BillTabContent(
                                 currentOrder = currentOrder,
                                 totalPrice = totalPrice,
-                                onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) }
+                                onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
+                                onSubmitOrder = {
+                                    val order = currentOrder ?: return@BillTabContent
+                                    val items = order.items.map {
+                                        com.opp.oder.network.ApiOrderItemRequest(it.menuItemId, it.name, it.quantity, it.price)
+                                    }
+                                    hostViewModel.submitOrder(order.order.tableId, items)
+                                    orderViewModel.settleOrder()
+                                }
                             )
                         }
                         Tab.MY -> MyTabContent(
@@ -409,6 +430,10 @@ fun MainScreen(
             onDecrement = {
                 val item = selectedMenuItem ?: return@RecipeSheet
                 orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, -1) }
+            },
+            onSaveRecipe = { steps, ingredients ->
+                val item = selectedMenuItem ?: return@RecipeSheet
+                menuViewModel.saveRecipe(item.id, steps, ingredients)
             }
         )
     }
@@ -510,10 +535,21 @@ private fun MenuTabContent(
     onAddToOrder: (MenuItemEntity) -> Unit,
     onUpdateQuantity: (OrderItemEntity, Int) -> Unit,
     onGuestAdd: (MenuItemEntity, Int, Int) -> Unit,
-    onSwitchToBill: () -> Unit
+    onSwitchToBill: () -> Unit,
+    onAddMenuItem: (MenuItemEntity) -> Unit,
+    onUpdateMenuItem: (MenuItemEntity) -> Unit,
+    onDeleteMenuItem: (Long) -> Unit
 ) {
     val categories = menuItems.map { it.category }.distinct()
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "") }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editingItem by remember { mutableStateOf<MenuItemEntity?>(null) }
+    val allCategories = remember { mutableStateListOf<String>().also { it.addAll(categories) } }
+
+    LaunchedEffect(categories) {
+        val existing = allCategories.toSet()
+        categories.forEach { if (it !in existing) allCategories.add(it) }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (isStaff) {
@@ -531,6 +567,13 @@ private fun MenuTabContent(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = {
+                    editingItem = null
+                    showEditDialog = true
+                }) {
+                    Text("+ 添加菜品", color = MaterialTheme.colorScheme.secondary)
+                }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
         } else {
@@ -559,42 +602,14 @@ private fun MenuTabContent(
                 Text("请先选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
             }
         } else {
-            val order = currentOrder
-            if (!isStaff && order != null && order.items.isNotEmpty()) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (!isStaff && totalItemCount > 0) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("当前订单", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
-                        Text("¥%.0f".format(totalPrice), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                    }
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp)
-                    ) {
-                        items(order.items) { item ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(item.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                                    Text("¥%.0f x ${item.quantity}".format(item.price), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                }
-                                Text("x${item.quantity}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
-                        }
-                    }
-                }
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    if (!isStaff && totalItemCount > 0) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -605,7 +620,8 @@ private fun MenuTabContent(
                             }
                         }
                     }
-                    LazyRow(
+                }
+                LazyRow(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -633,16 +649,17 @@ private fun MenuTabContent(
                             modifier = Modifier.weight(1f)
                         ) {
                             gridItems(filteredItems) { item ->
-                                MenuCard(
-                                    item = item,
-                                    onClick = {
-                                        if (isStaff) {
-                                            onItemClick(item)
-                                        } else {
-                                            onAddToOrder(item)
-                                            onItemClick(item)
-                                        }
-                                    },
+                                Box {
+                                    MenuCard(
+                                        item = item,
+                                        onClick = {
+                                            if (isStaff) {
+                                                onItemClick(item)
+                                            } else {
+                                                onAddToOrder(item)
+                                                onItemClick(item)
+                                            }
+                                        },
                                     showAddButton = !isStaff,
                                     orderQuantity = orderQuantities[item.id] ?: 0,
                                     onAddClick = { x, y ->
@@ -652,20 +669,128 @@ private fun MenuTabContent(
                                     onIncrement = { orderItemMap[item.id]?.let { onUpdateQuantity(it, 1) } },
                                     onDecrement = { orderItemMap[item.id]?.let { onUpdateQuantity(it, -1) } }
                                 )
-                            }
+                                if (isStaff) {
+                                    TextButton(
+                                        onClick = {
+                                            editingItem = item
+                                            showEditDialog = true
+                                        },
+                                        modifier = Modifier.align(Alignment.TopEnd)
+                                    ) {
+                                        Text("✏", fontSize = 12.sp)
                         }
                     }
                 }
             }
         }
     }
+            }
+        }
+    }
+
+    if (showEditDialog) {
+        MenuItemEditDialog(
+            editingItem = editingItem,
+            allCategories = allCategories.toList(),
+            onDismiss = { showEditDialog = false },
+            onSave = { item ->
+                if (editingItem != null) onUpdateMenuItem(item)
+                else onAddMenuItem(item)
+                showEditDialog = false
+            },
+            onDelete = if (editingItem != null) {
+                { onDeleteMenuItem(editingItem!!.id); showEditDialog = false }
+            } else null
+        )
+    }
+}
+
+@Composable
+private fun MenuItemEditDialog(
+    editingItem: MenuItemEntity?,
+    allCategories: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (MenuItemEntity) -> Unit,
+    onDelete: (() -> Unit)?
+) {
+    var name by remember(editingItem) { mutableStateOf(editingItem?.name ?: "") }
+    var price by remember(editingItem) { mutableStateOf(editingItem?.price?.toString() ?: "") }
+    var hasRecipe by remember(editingItem) { mutableStateOf(editingItem?.hasRecipe ?: false) }
+    var selectedCategory by remember(editingItem) { mutableStateOf(editingItem?.category ?: allCategories.firstOrNull() ?: "other") }
+    var newCategory by remember { mutableStateOf("") }
+    var showNewCategory by remember { mutableStateOf(false) }
+    val isNew = editingItem == null
+
+    val displayCategories = allCategories.map { it to categoryLabel(it) }
+    val selectedCategoryKey = selectedCategory
+    val selectedCategoryLabel = categoryLabel(selectedCategory)
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isNew) "添加菜品" else "编辑菜品") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = price, onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } }, label = { Text("价格") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("分类", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(displayCategories) { (key, label) ->
+                        FilterChip(selected = key == selectedCategoryKey, onClick = { selectedCategory = key }, label = { Text(label) })
+                    }
+                    item {
+                        if (showNewCategory) {
+                            OutlinedTextField(
+                                value = newCategory,
+                                onValueChange = { newCategory = it; if (it.isNotBlank()) selectedCategory = it },
+                                label = { Text("新分类") },
+                                singleLine = true,
+                                modifier = Modifier.width(120.dp)
+                            )
+                        } else {
+                            FilterChip(selected = false, onClick = { showNewCategory = true }, label = { Text("+") })
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("含配方", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Spacer(Modifier.weight(1f))
+                    Switch(checked = hasRecipe, onCheckedChange = { hasRecipe = it })
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val p = price.toDoubleOrNull() ?: 0.0
+                val cat = selectedCategory.ifBlank { "other" }
+                val item = MenuItemEntity(
+                    id = editingItem?.id ?: 0,
+                    name = name.ifBlank { "未命名" },
+                    price = p,
+                    category = cat,
+                    hasRecipe = hasRecipe
+                )
+                onSave(item)
+            }, enabled = name.isNotBlank()) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row {
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                }
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+        }
+    )
 }
 
 @Composable
 private fun BillTabContent(
     currentOrder: com.opp.oder.data.db.dao.OrderWithItems?,
     totalPrice: Double,
-    onUpdateQuantity: (OrderItemEntity, Int) -> Unit
+    onUpdateQuantity: (OrderItemEntity, Int) -> Unit,
+    onSubmitOrder: (() -> Unit)? = null
 ) {
     val order = currentOrder
     if (order != null && order.items.isNotEmpty()) {
@@ -689,6 +814,12 @@ private fun BillTabContent(
                         QuantityStepper(quantity = item.quantity, onIncrement = { onUpdateQuantity(item, 1) }, onDecrement = { onUpdateQuantity(item, -1) })
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
+                }
+            }
+            if (onSubmitOrder != null) {
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onSubmitOrder, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Text("提交订单")
                 }
             }
         }
@@ -896,6 +1027,9 @@ private fun SettingsPage(
 ) {
     val changePinResult by roleViewModel.changePinResult.collectAsStateWithLifecycle()
     val hostMode by hostViewModel.mode.collectAsStateWithLifecycle()
+    val syncStatus by hostViewModel.syncStatus.collectAsStateWithLifecycle()
+    val connectedHostId by hostViewModel.connectedHostId.collectAsStateWithLifecycle()
+    val connectedHostIp by hostViewModel.connectedHostIp.collectAsStateWithLifecycle()
 
     var showChangePin by remember { mutableStateOf(false) }
     var oldPin by remember { mutableStateOf("") }
@@ -958,15 +1092,21 @@ private fun SettingsPage(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                 Text("局域网", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    if (hostMode == HostViewModel.Mode.HOST) "状态: 主机模式" else "状态: 未连接",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
+                Spacer(Modifier.height(4.dp))
+                val modeText = when (hostMode) {
+                    HostViewModel.Mode.HOST -> "● 主机模式运行中"
+                    HostViewModel.Mode.CLIENT -> "● 客户端模式"
+                    else -> "○ 未连接"
+                }
+                Text(modeText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 Spacer(Modifier.height(4.dp))
                 Button(onClick = onStartHost, modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("作为主机") }
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Text(if (hostMode == HostViewModel.Mode.HOST) "主机运行中（点击重启）" else "作为主机")
+                }
+                if (hostMode == HostViewModel.Mode.HOST) {
+                    Text("心跳: ● 每5秒广播一次", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.padding(top = 4.dp))
+                }
                 Spacer(Modifier.height(4.dp))
 
                 if (discoveredHosts.isNotEmpty()) {
@@ -977,6 +1117,20 @@ private fun SettingsPage(
                             modifier = Modifier.clickable { onConnectToHost(ip) }.padding(vertical = 4.dp),
                             color = MaterialTheme.colorScheme.primary)
                     }
+                }
+            } else {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Text("局域网", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.height(4.dp))
+                val st = when (syncStatus) {
+                    HostViewModel.SyncStatus.DISCONNECTED -> "○ 未连接"
+                    HostViewModel.SyncStatus.CONNECTING -> "◌ 连接中..."
+                    HostViewModel.SyncStatus.SYNCED -> "● 已同步"
+                    HostViewModel.SyncStatus.ERROR -> "✕ 连接失败"
+                }
+                Text(st, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                if (connectedHostId.isNotEmpty()) {
+                    Text("主机: $connectedHostId ($connectedHostIp)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                 }
             }
 
@@ -1001,7 +1155,7 @@ private fun SettingsPage(
             Spacer(Modifier.height(40.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
             Spacer(Modifier.height(16.dp))
-            Text("Oder++ v1.0.2",
+                Text("Oder++ v1.0.3",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                 modifier = Modifier.fillMaxWidth(),

@@ -13,10 +13,10 @@ class MenuItemDao(private val helper: DatabaseHelper) {
 
     suspend fun getAll(): List<MenuItemEntity> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
-        val c = db.rawQuery("SELECT * FROM menu_items ORDER BY category, name", null)
+        val c = db.rawQuery("SELECT * FROM menu_items ORDER BY sort_order, category, name", null)
         val list = mutableListOf<MenuItemEntity>()
         while (c.moveToNext()) {
-            list.add(MenuItemEntity(c.getLong(0), c.getString(1), c.getDouble(2), c.getString(3), c.getInt(4) == 1))
+            list.add(MenuItemEntity(c.getLong(0), c.getString(1), c.getDouble(2), c.getString(3), c.getInt(4) == 1, c.getInt(5)))
         }
         c.close()
         list
@@ -24,10 +24,10 @@ class MenuItemDao(private val helper: DatabaseHelper) {
 
     suspend fun getByCategory(category: String): List<MenuItemEntity> = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
-        val c = db.rawQuery("SELECT * FROM menu_items WHERE category = ? ORDER BY name", arrayOf(category))
+        val c = db.rawQuery("SELECT * FROM menu_items WHERE category = ? ORDER BY sort_order, name", arrayOf(category))
         val list = mutableListOf<MenuItemEntity>()
         while (c.moveToNext()) {
-            list.add(MenuItemEntity(c.getLong(0), c.getString(1), c.getDouble(2), c.getString(3), c.getInt(4) == 1))
+            list.add(MenuItemEntity(c.getLong(0), c.getString(1), c.getDouble(2), c.getString(3), c.getInt(4) == 1, c.getInt(5)))
         }
         c.close()
         list
@@ -36,7 +36,7 @@ class MenuItemDao(private val helper: DatabaseHelper) {
     suspend fun getById(id: Long): MenuItemEntity? = withContext(Dispatchers.IO) {
         val db = helper.readableDatabase
         val c = db.rawQuery("SELECT * FROM menu_items WHERE id = ?", arrayOf(id.toString()))
-        val result = if (c.moveToFirst()) MenuItemEntity(c.getLong(0), c.getString(1), c.getDouble(2), c.getString(3), c.getInt(4) == 1) else null
+        val result = if (c.moveToFirst()) MenuItemEntity(c.getLong(0), c.getString(1), c.getDouble(2), c.getString(3), c.getInt(4) == 1, c.getInt(5)) else null
         c.close()
         result
     }
@@ -59,5 +59,29 @@ class MenuItemDao(private val helper: DatabaseHelper) {
 
     suspend fun deleteById(id: Long) = withContext(Dispatchers.IO) {
         helper.writableDatabase.delete("menu_items", "id = ?", arrayOf(id.toString()))
+    }
+
+    suspend fun updateSortOrders(ids: List<Long>) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        ids.forEachIndexed { index, id ->
+            val cv = ContentValues().apply { put("sort_order", index) }
+            db.update("menu_items", cv, "id = ?", arrayOf(id.toString()))
+        }
+    }
+
+    suspend fun syncFromApi(items: List<com.opp.oder.network.ApiMenuItem>) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        db.delete("menu_items", null, null)
+        items.forEach { m ->
+            val cv = ContentValues().apply {
+                put("id", m.id)
+                put("name", m.name)
+                put("price", m.price)
+                put("category", m.category)
+                put("hasRecipe", if (m.hasRecipe) 1 else 0)
+                put("sort_order", 0)
+            }
+            db.insertWithOnConflict("menu_items", null, cv, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
+        }
     }
 }

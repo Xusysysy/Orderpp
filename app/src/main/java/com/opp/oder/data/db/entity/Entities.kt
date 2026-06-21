@@ -4,7 +4,8 @@ data class TableEntity(
     val id: Long = 0,
     val name: String,
     val zone: String = "",
-    val status: String = STATUS_IDLE
+    val status: String = STATUS_IDLE,
+    val sortOrder: Int = 0
 ) {
     companion object {
         const val STATUS_IDLE = "IDLE"
@@ -17,7 +18,8 @@ data class MenuItemEntity(
     val name: String,
     val price: Double = 0.0,
     val category: String = CATEGORY_COCKTAIL,
-    val hasRecipe: Boolean = false
+    val hasRecipe: Boolean = false,
+    val sortOrder: Int = 0
 ) {
     companion object {
         const val CATEGORY_COCKTAIL = "cocktail"

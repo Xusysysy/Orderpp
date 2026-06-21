@@ -10,8 +10,8 @@
 
 | 功能 | 说明 |
 |------|------|
-| 桌位管理 | 查看/添加/删除桌位，按区域分组，状态圆点标记（空闲/已下单） |
-| 菜单浏览 | 分类筛选（调酒/饮料/小食），卡片网格展示 |
+| 桌位管理 | 查看/添加/删除桌位，按区域分组，状态圆点标记（空闲/已下单），长按拖拽排序 |
+| 菜单浏览 | 分类筛选（调酒/饮料/小食），卡片网格展示，点击「排序」进入拖拽排序模式 |
 | 配方系统 | 内置 15 款经典调酒，点击查看原料与步骤，支持员工增删改 |
 | 订单管理 | 选定桌位后添加菜品，数量加减，实时合计，一键结账 |
 | 局域网主机 | 一台设备设为 Host，启动内嵌 HTTP Server，其他设备连接即可同步 |
@@ -20,8 +20,9 @@
 
 | 功能 | 说明 |
 |------|------|
-| 菜单查看 | 浏览分类菜单，点击查看配方详情 |
-| 订单查看 | 只读当前桌的订单明细和总价 |
+| 菜单查看 | 浏览分类菜单，点击查看配方详情，首次选桌后自动记住桌位号 |
+| 点单下单 | 菜单页顶部简略显示已点数量/金额，主区域始终保留菜单网格，可继续点菜 |
+| 订单查看 | 账单 Tab 查看当前订单明细和总价 |
 
 ### 预置配方（15 款经典调酒）
 
@@ -34,28 +35,30 @@ Mojito · Margarita · Old Fashioned · Daiquiri · Martini · Negroni · Whiske
 ## 界面流程
 
 ```
-      启动 App
-         │
-  RoleSelectScreen
-  ┌───────┴─────────┐
-  │ 员工（PIN验证）   │ 客人（直接进入）
-  └───────┬─────────┘
+       启动 App
           │
-  HostSetupScreen
-  ┌───────┴─────────┐
-  │  Host 模式       │ Client 模式（扫描局域网）
-  └───────┬─────────┘
+   直接进入 MainScreen（默认客人模式）
           │
-  MainScreen（平板双栏）
-  ┌─────────────┬──────────────────────┐
-  │  桌位列表    │   菜单网格 / 订单详情   │
-  │  TableList  │   MenuPane           │
-  │             │   OrderPane          │
-  │ [切换角色]   │                      │
-  └─────────────┴──────────────────────┘
-                    │
-              RecipeSheet（底部弹出）
-              原料清单 + 步骤说明
+   ┌──────┴──────┐
+   │ NavigationBar │
+   │ 菜单 | 账单 | 我的 │
+   └──────┬──────┘
+          │
+   ─ 菜单 Tab ─
+   ├── 客人：顶部简略订单条 + 菜单网格
+   ├── 员工：「排序」按钮 → 长按拖拽排序
+   ├── 桌位按钮 → 左侧滑出 TableDrawer
+   └── 点击菜单项 → RecipeSheet 配方弹窗
+          │
+   ─ 账单 Tab ─
+   ├── 客人：当前订单明细 + 数量加减
+   └── 员工：全部桌位订单列表 + 结账
+          │
+   ─ 我的 Tab ─
+   └── 齿轮 ⚙ → SettingsPage（主题/PIN/网络/模式切换）
+          │
+   ─ 全局返回手势 ─
+   任意页面 → 返回上一级 → 最终回到菜单 Tab → 双击返回退出 App
 ```
 
 ---
@@ -73,8 +76,8 @@ Mojito · Margarita · Old Fashioned · Daiquiri · Martini · Negroni · Whiske
 │              Repository Layer               │
 │  业务逻辑封装 → Room DAO / SyncClient         │
 ├──────────────────┬──────────────────────────┤
-│    Room DAO       │     Ktor Network         │
-│  Flow / suspend   │  HostServer (8765)       │
+│    SQLite DAO     │     Ktor Network         │
+│  suspend          │  HostServer (8765)       │
 │       │           │  SyncClient (HTTP)       │
 │  SQLite (本地)    │  NSD 服务发现             │
 └──────────────────┴──────────────────────────┘
@@ -91,7 +94,7 @@ Mojito · Margarita · Old Fashioned · Daiquiri · Martini · Negroni · Whiske
 |---|------|------|
 | 语言 | Kotlin | 2.2.10 |
 | UI | Jetpack Compose + Material3 + Adaptive Navigation | BOM 2025.12.00 |
-| 数据库 | Room (SQLite) + KSP 注解处理 | 2.7.1 |
+| 数据库 | 原生 SQLiteOpenHelper (非 Room) | — |
 | 网络服务 | Ktor CIO 嵌入式 HTTP Server | 3.1.2 |
 | 网络客户端 | Ktor HttpClient (Android) | 3.1.2 |
 | 网络发现 | Android NSD (Network Service Discovery) | — |
