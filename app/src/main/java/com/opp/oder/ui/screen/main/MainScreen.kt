@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -95,7 +96,6 @@ fun MainScreen(
     discoveredHosts: List<NsdServiceInfo>,
     onStartHost: () -> Unit,
     onConnectToHost: (String) -> Unit,
-    onSwitchRole: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val tables by tableViewModel.tables.collectAsStateWithLifecycle()
@@ -109,141 +109,154 @@ fun MainScreen(
     val recipeIngredients by menuViewModel.recipeIngredients.collectAsStateWithLifecycle()
     val sheetVisible by menuViewModel.sheetVisible.collectAsStateWithLifecycle()
     val role by roleViewModel.role.collectAsStateWithLifecycle()
-    val hostMode by hostViewModel.mode.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableStateOf(Tab.MENU) }
     var showTableDrawer by remember { mutableStateOf(false) }
-    var showAddTableDialog by remember { mutableStateOf(false) }
-    var newTableName by remember { mutableStateOf("") }
+    var showSettings by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pinInput by remember { mutableStateOf("") }
+    val pinError by roleViewModel.pinError.collectAsStateWithLifecycle()
 
     val selectedTable = tables.find { it.id == selectedTableId }
     val isStaff = role == RoleViewModel.Role.STAFF
 
-    Scaffold(
-        modifier = modifier,
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == Tab.MENU,
-                    onClick = { selectedTab = Tab.MENU },
-                    icon = { Text("🍽", style = MaterialTheme.typography.titleLarge) },
-                    label = { Text("菜单") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == Tab.BILL,
-                    onClick = { selectedTab = Tab.BILL },
-                    icon = { Text("📋", style = MaterialTheme.typography.titleLarge) },
-                    label = { Text("账单") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == Tab.MY,
-                    onClick = { selectedTab = Tab.MY },
-                    icon = { Text("👤", style = MaterialTheme.typography.titleLarge) },
-                    label = { Text("我的") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    )
-                )
-            }
-        }
-    ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when (selectedTab) {
-                Tab.MENU -> MenuTabContent(
-                    tables = tables,
-                    selectedTableId = selectedTableId,
-                    selectedTable = selectedTable,
-                    isStaff = isStaff,
-                    menuItems = menuItems,
-                    currentOrder = currentOrder,
-                    totalPrice = totalPrice,
-                    onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
-                    onShowTableDrawer = { showTableDrawer = true },
-                    onItemClick = { if (it.hasRecipe) menuViewModel.selectItem(it) },
-                    onAddToOrder = { item -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) } },
-                    onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
-                    onSettle = { orderViewModel.settleOrder() }
-                )
-                Tab.BILL -> BillTabContent(
-                    currentOrder = currentOrder,
-                    totalPrice = totalPrice,
-                    menuItems = menuItems,
-                    isStaff = isStaff,
-                    selectedTableId = selectedTableId,
-                    selectedTableName = selectedTable?.name,
-                    onAddItem = { menuId, name, price -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, menuId, name, price) } },
-                    onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
-                    onSettle = { orderViewModel.settleOrder() },
-                    onSelectMenuItem = { if (it.hasRecipe) menuViewModel.selectItem(it) }
-                )
-                Tab.MY -> MyTabContent(
-                    role = role,
-                    isDark = isDark,
-                    onToggleTheme = onToggleTheme,
-                    roleViewModel = roleViewModel,
-                    hostViewModel = hostViewModel,
-                    hostMode = hostMode,
-                    discoveredHosts = discoveredHosts,
-                    onStartHost = onStartHost,
-                    onConnectToHost = onConnectToHost,
-                    onSwitchRole = onSwitchRole
-                )
-            }
-
-            AnimatedVisibility(
-                visible = showTableDrawer,
-                enter = slideInHorizontally(initialOffsetX = { -it }),
-                exit = slideOutHorizontally(targetOffsetX = { -it }),
-                modifier = Modifier.zIndex(2f).fillMaxHeight()
-            ) {
-                TableDrawer(
-                    tables = tables,
-                    selectedTableId = selectedTableId,
-                    zones = zones,
-                    isStaff = isStaff,
-                    onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
-                    onAddTable = { name -> tableViewModel.addTable(name) },
-                    onDeleteTable = { table -> tableViewModel.deleteTable(table.id) },
-                    onDismiss = { showTableDrawer = false }
-                )
-            }
-
-            if (showTableDrawer) {
-                Box(
-                    modifier = Modifier.fillMaxSize().zIndex(1f)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showTableDrawer = false }
-                )
-            }
-        }
-    }
-
-    if (showAddTableDialog) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showAddTableDialog = false },
-            title = { Text("添加桌位") },
-            text = { OutlinedTextField(value = newTableName, onValueChange = { newTableName = it }, label = { Text("桌号名称") }, singleLine = true) },
-            confirmButton = {
-                Button(onClick = {
-                    if (newTableName.isNotBlank()) { tableViewModel.addTable(newTableName); newTableName = ""; showAddTableDialog = false }
-                }) { Text("添加") }
+    if (showSettings) {
+        SettingsPage(
+            isDark = isDark,
+            onToggleTheme = onToggleTheme,
+            role = role,
+            roleViewModel = roleViewModel,
+            hostViewModel = hostViewModel,
+            discoveredHosts = discoveredHosts,
+            onStartHost = { onStartHost(); showSettings = false },
+            onConnectToHost = { ip -> onConnectToHost(ip); showSettings = false },
+            showPinDialog = showPinDialog,
+            pinInput = pinInput,
+            pinError = pinError,
+            onRequestStaffMode = { showPinDialog = true },
+            onRequestGuestMode = {
+                roleViewModel.selectRole(RoleViewModel.Role.GUEST)
+                showSettings = false
             },
-            dismissButton = { TextButton(onClick = { showAddTableDialog = false }) { Text("取消") } }
+            onDismissPinDialog = {
+                showPinDialog = false; pinInput = ""; roleViewModel.resetPinError()
+            },
+            onPinInputChange = { pinInput = it.take(4); roleViewModel.resetPinError() },
+            onConfirmPin = {
+                if (roleViewModel.verifyPin(pinInput)) {
+                    roleViewModel.selectRole(RoleViewModel.Role.STAFF)
+                    showPinDialog = false
+                    pinInput = ""
+                    showSettings = false
+                }
+            },
+            onBack = { showSettings = false }
         )
+    } else {
+        Scaffold(
+            modifier = modifier,
+            bottomBar = {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 4.dp
+                ) {
+                    NavigationBarItem(
+                        selected = selectedTab == Tab.MENU,
+                        onClick = { selectedTab = Tab.MENU },
+                        icon = { Text("🍽", style = MaterialTheme.typography.titleLarge) },
+                        label = { Text("菜单") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == Tab.BILL,
+                        onClick = { selectedTab = Tab.BILL },
+                        icon = { Text("📋", style = MaterialTheme.typography.titleLarge) },
+                        label = { Text("账单") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == Tab.MY,
+                        onClick = { selectedTab = Tab.MY },
+                        icon = { Text("👤", style = MaterialTheme.typography.titleLarge) },
+                        label = { Text("我的") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        )
+                    )
+                }
+            }
+        ) { innerPadding ->
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                when (selectedTab) {
+                    Tab.MENU -> MenuTabContent(
+                        tables = tables,
+                        selectedTableId = selectedTableId,
+                        selectedTable = selectedTable,
+                        isStaff = isStaff,
+                        menuItems = menuItems,
+                        currentOrder = currentOrder,
+                        totalPrice = totalPrice,
+                        onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
+                        onShowTableDrawer = { showTableDrawer = true },
+                        onItemClick = { if (it.hasRecipe) menuViewModel.selectItem(it) },
+                        onAddToOrder = { item -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) } },
+                        onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
+                        onSettle = { orderViewModel.settleOrder() }
+                    )
+                    Tab.BILL -> BillTabContent(
+                        currentOrder = currentOrder,
+                        totalPrice = totalPrice,
+                        menuItems = menuItems,
+                        isStaff = isStaff,
+                        selectedTableId = selectedTableId,
+                        selectedTableName = selectedTable?.name,
+                        onAddItem = { menuId, name, price -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, menuId, name, price) } },
+                        onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
+                        onSettle = { orderViewModel.settleOrder() },
+                        onSelectMenuItem = { if (it.hasRecipe) menuViewModel.selectItem(it) }
+                    )
+                    Tab.MY -> MyTabContent(
+                        role = role,
+                        onOpenSettings = { showSettings = true }
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = showTableDrawer,
+                    enter = slideInHorizontally(initialOffsetX = { -it }),
+                    exit = slideOutHorizontally(targetOffsetX = { -it }),
+                    modifier = Modifier.zIndex(2f).fillMaxHeight()
+                ) {
+                    TableDrawer(
+                        tables = tables,
+                        selectedTableId = selectedTableId,
+                        zones = zones,
+                        isStaff = isStaff,
+                        onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
+                        onAddTable = { name -> tableViewModel.addTable(name) },
+                        onDeleteTable = { table -> tableViewModel.deleteTable(table.id) },
+                        onDismiss = { showTableDrawer = false }
+                    )
+                }
+
+                if (showTableDrawer) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().zIndex(1f)
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showTableDrawer = false }
+                    )
+                }
+            }
+        }
     }
 
     if (sheetVisible) {
@@ -306,7 +319,7 @@ private fun TableDrawer(
             }
             if (isStaff) {
                 Spacer(Modifier.height(8.dp))
-                androidx.compose.material3.OutlinedButton(
+                OutlinedButton(
                     onClick = { showAddDialog = true },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("+ 添加桌位") }
@@ -538,30 +551,20 @@ private fun BillTabContent(
 @Composable
 private fun MyTabContent(
     role: RoleViewModel.Role,
-    isDark: Boolean,
-    onToggleTheme: () -> Unit,
-    roleViewModel: RoleViewModel,
-    hostViewModel: HostViewModel,
-    hostMode: HostViewModel.Mode,
-    discoveredHosts: List<NsdServiceInfo>,
-    onStartHost: () -> Unit,
-    onConnectToHost: (String) -> Unit,
-    onSwitchRole: () -> Unit
+    onOpenSettings: () -> Unit
 ) {
-    var showSettingsSheet by remember { mutableStateOf(false) }
-
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("我的", color = MaterialTheme.colorScheme.onBackground) },
             actions = {
-                IconButton(onClick = { showSettingsSheet = true }) {
+                IconButton(onClick = onOpenSettings) {
                     Text("⚙", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
         )
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)
+            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)
         ) {
             Spacer(Modifier.height(16.dp))
             Text("个人信息", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
@@ -581,32 +584,169 @@ private fun MyTabContent(
                 )
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(24.dp))
 
-            Text("切换角色",
-                modifier = Modifier.clickable { onSwitchRole() }.padding(vertical = 8.dp).fillMaxWidth(),
-                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-
-            Spacer(Modifier.height(32.dp))
             Text("提示", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
             Spacer(Modifier.height(8.dp))
-            Text("点击右上角齿轮图标进入设置，可修改密码、管理网络连接等。",
+            Text("点击右上角齿轮图标进入设置。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
         }
     }
+}
 
-    if (showSettingsSheet) {
-        SettingsSheet(
-            isDark = isDark,
-            onToggleTheme = onToggleTheme,
-            role = role,
-            roleViewModel = roleViewModel,
-            hostViewModel = hostViewModel,
-            discoveredHosts = discoveredHosts,
-            onStartHost = onStartHost,
-            onConnectToHost = onConnectToHost,
-            onSwitchRole = onSwitchRole,
-            onDismiss = { showSettingsSheet = false }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsPage(
+    isDark: Boolean,
+    onToggleTheme: () -> Unit,
+    role: RoleViewModel.Role,
+    roleViewModel: RoleViewModel,
+    hostViewModel: HostViewModel,
+    discoveredHosts: List<NsdServiceInfo>,
+    onStartHost: () -> Unit,
+    onConnectToHost: (String) -> Unit,
+    showPinDialog: Boolean,
+    pinInput: String,
+    pinError: Boolean,
+    onRequestStaffMode: () -> Unit,
+    onRequestGuestMode: () -> Unit,
+    onDismissPinDialog: () -> Unit,
+    onPinInputChange: (String) -> Unit,
+    onConfirmPin: () -> Unit,
+    onBack: () -> Unit
+) {
+    val changePinResult by roleViewModel.changePinResult.collectAsStateWithLifecycle()
+    val hostMode by hostViewModel.mode.collectAsStateWithLifecycle()
+
+    var showChangePin by remember { mutableStateOf(false) }
+    var oldPin by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("设置", color = MaterialTheme.colorScheme.onBackground) },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("← 返回", color = MaterialTheme.colorScheme.primary) }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+        ) {
+            Spacer(Modifier.height(8.dp))
+
+            Text("模式切换", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.height(8.dp))
+
+            Button(
+                onClick = onRequestStaffMode,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                enabled = role != RoleViewModel.Role.STAFF,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) { Text("进入员工模式", style = MaterialTheme.typography.titleMedium) }
+
+            Spacer(Modifier.height(8.dp))
+
+            Button(
+                onClick = onRequestGuestMode,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                enabled = role != RoleViewModel.Role.GUEST,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) { Text("进入客人模式", style = MaterialTheme.typography.titleMedium) }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            Text("外观", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("暗色主题", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                Switch(checked = isDark, onCheckedChange = { onToggleTheme() })
+            }
+
+            if (role == RoleViewModel.Role.STAFF) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Text("安全", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.height(4.dp))
+
+                if (showChangePin) {
+                    OutlinedTextField(value = oldPin, onValueChange = { oldPin = it.take(4); roleViewModel.clearChangePinResult() },
+                        label = { Text("旧密码") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = newPin, onValueChange = { newPin = it.take(4); roleViewModel.clearChangePinResult() },
+                        label = { Text("新密码(4位)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { roleViewModel.changePin(oldPin, newPin) }) { Text("确认修改") }
+                        Button(onClick = { showChangePin = false; oldPin = ""; newPin = ""; roleViewModel.clearChangePinResult() },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)) { Text("取消") }
+                    }
+                    changePinResult?.let {
+                        Text(it, color = if (it.contains("成功")) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp))
+                    }
+                } else {
+                    Text("修改密码",
+                        modifier = Modifier.clickable { showChangePin = true }.padding(vertical = 8.dp).fillMaxWidth(),
+                        style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Text("局域网", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (hostMode == HostViewModel.Mode.HOST) "状态: 主机模式" else "状态: 未连接",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(Modifier.height(4.dp))
+                Button(onClick = onStartHost, modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) { Text("作为主机") }
+                Spacer(Modifier.height(4.dp))
+
+                if (discoveredHosts.isNotEmpty()) {
+                    Text("发现的主机:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    discoveredHosts.forEach { host ->
+                        val ip = host.host?.hostAddress ?: ""
+                        Text("${host.serviceName} ($ip)",
+                            modifier = Modifier.clickable { onConnectToHost(ip) }.padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+
+    if (showPinDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onDismissPinDialog,
+            title = { Text("员工验证") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = onPinInputChange,
+                        label = { Text("请输入PIN码") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        isError = pinError
+                    )
+                    if (pinError) {
+                        Text("PIN码错误", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = { Button(onClick = onConfirmPin) { Text("确认") } },
+            dismissButton = { TextButton(onClick = onDismissPinDialog) { Text("取消") } }
         )
     }
 }

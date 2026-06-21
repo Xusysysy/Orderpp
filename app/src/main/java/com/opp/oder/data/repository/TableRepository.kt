@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 class TableRepository(private val dao: TableDao) {
     fun getAll(): Flow<List<TableEntity>> = dao.getAllFlow()
 
+    suspend fun getAllDirect(): List<TableEntity> = dao.getAll()
+
     suspend fun getById(id: Long): TableEntity? = dao.getById(id)
 
     suspend fun insert(table: TableEntity): Long = dao.insert(table)

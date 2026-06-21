@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -41,7 +42,6 @@ import com.opp.oder.data.repository.TableRepository
 import com.opp.oder.network.DiscoveryService
 import com.opp.oder.network.HostServer
 import com.opp.oder.network.SyncClient
-import com.opp.oder.ui.screen.RoleSelectScreen
 import com.opp.oder.ui.screen.main.MainScreen
 import com.opp.oder.ui.theme.OderTheme
 import com.opp.oder.util.LogWriter
@@ -50,8 +50,6 @@ import com.opp.oder.viewmodel.MenuViewModel
 import com.opp.oder.viewmodel.OrderViewModel
 import com.opp.oder.viewmodel.RoleViewModel
 import com.opp.oder.viewmodel.TableViewModel
-
-enum class NavScreen { ROLE_SELECT, MAIN }
 
 @Composable
 fun OderAppContent() {
@@ -102,67 +100,53 @@ private fun ErrorScreen(message: String) {
 @Composable
 private fun MainApp(helper: DatabaseHelper, app: OderApp) {
     var isDark by remember { mutableStateOf(true) }
-    var currentScreen by remember { mutableStateOf(NavScreen.MAIN) }
 
     OderTheme(darkTheme = isDark) {
-        when (currentScreen) {
-            NavScreen.ROLE_SELECT -> {
-                val roleViewModel: RoleViewModel = viewModel()
-                RoleSelectScreen(
-                    viewModel = roleViewModel,
-                    onStaffEnter = { currentScreen = NavScreen.MAIN },
-                    onGuestEnter = { currentScreen = NavScreen.MAIN }
-                )
-            }
-            NavScreen.MAIN -> {
-                val roleViewModel: RoleViewModel = viewModel()
-                if (roleViewModel.role.value == RoleViewModel.Role.NONE) {
-                    roleViewModel.selectRole(RoleViewModel.Role.GUEST)
-                }
-                val hostViewModel: HostViewModel = viewModel()
-                val tableDao = remember { com.opp.oder.data.db.dao.TableDao(helper) }
-                val menuDao = remember { com.opp.oder.data.db.dao.MenuItemDao(helper) }
-                val recipeDao = remember { com.opp.oder.data.db.dao.RecipeDao(helper) }
-                val orderDao = remember { com.opp.oder.data.db.dao.OrderDao(helper) }
-                val tableRepository = remember { TableRepository(tableDao) }
-                val menuRepository = remember { MenuRepository(menuDao, recipeDao) }
-                val orderRepository = remember { OrderRepository(orderDao) }
-                val tableViewModel: TableViewModel = viewModel(factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST") override fun <T : androidx.lifecycle.ViewModel> create(c: Class<T>): T = TableViewModel(tableRepository) as T })
-                val menuViewModel: MenuViewModel = viewModel(factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST") override fun <T : androidx.lifecycle.ViewModel> create(c: Class<T>): T = MenuViewModel(menuRepository) as T })
-                val orderViewModel: OrderViewModel = viewModel(factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST") override fun <T : androidx.lifecycle.ViewModel> create(c: Class<T>): T = OrderViewModel(orderRepository) as T })
+        val roleViewModel: RoleViewModel = viewModel()
+        if (roleViewModel.role.value == RoleViewModel.Role.NONE) {
+            roleViewModel.selectRole(RoleViewModel.Role.GUEST)
+        }
+        val hostViewModel: HostViewModel = viewModel()
+        val tableDao = remember { com.opp.oder.data.db.dao.TableDao(helper) }
+        val menuDao = remember { com.opp.oder.data.db.dao.MenuItemDao(helper) }
+        val recipeDao = remember { com.opp.oder.data.db.dao.RecipeDao(helper) }
+        val orderDao = remember { com.opp.oder.data.db.dao.OrderDao(helper) }
+        val tableRepository = remember { TableRepository(tableDao) }
+        val menuRepository = remember { MenuRepository(menuDao, recipeDao) }
+        val orderRepository = remember { OrderRepository(orderDao) }
+        val tableViewModel: TableViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST") override fun <T : androidx.lifecycle.ViewModel> create(c: Class<T>): T = TableViewModel(tableRepository) as T })
+        val menuViewModel: MenuViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST") override fun <T : androidx.lifecycle.ViewModel> create(c: Class<T>): T = MenuViewModel(menuRepository) as T })
+        val orderViewModel: OrderViewModel = viewModel(factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST") override fun <T : androidx.lifecycle.ViewModel> create(c: Class<T>): T = OrderViewModel(orderRepository) as T })
 
-                val discoveredHosts = remember { mutableStateListOf<NsdServiceInfo>() }
-                val discoveryService = remember { DiscoveryService(app) }
-                val role by roleViewModel.role.collectAsStateWithLifecycle()
+        val discoveredHosts = remember { mutableStateListOf<NsdServiceInfo>() }
+        val discoveryService = remember { DiscoveryService(app) }
+        val role by roleViewModel.role.collectAsStateWithLifecycle()
 
-                LaunchedEffect(Unit) {
-                    discoveryService.startDiscovery()
-                    discoveryService.onHostDiscovered = { info ->
-                        if (discoveredHosts.none { it.serviceName == info.serviceName }) discoveredHosts.add(info)
-                    }
-                }
-
-                MainScreen(
-                    tableViewModel = tableViewModel,
-                    menuViewModel = menuViewModel,
-                    orderViewModel = orderViewModel,
-                    roleViewModel = roleViewModel,
-                    hostViewModel = hostViewModel,
-                    isDark = isDark,
-                    onToggleTheme = { isDark = !isDark },
-                    discoveredHosts = discoveredHosts,
-                    onStartHost = {
-                        hostViewModel.setHostMode(HostServer(helper), discoveryService)
-                    },
-                    onConnectToHost = { ip ->
-                        hostViewModel.setClientMode(ip, SyncClient(ip), discoveryService)
-                    },
-                    onSwitchRole = { currentScreen = NavScreen.ROLE_SELECT }
-                )
+        LaunchedEffect(Unit) {
+            discoveryService.startDiscovery()
+            discoveryService.onHostDiscovered = { info ->
+                if (discoveredHosts.none { it.serviceName == info.serviceName }) discoveredHosts.add(info)
             }
         }
+
+        MainScreen(
+            tableViewModel = tableViewModel,
+            menuViewModel = menuViewModel,
+            orderViewModel = orderViewModel,
+            roleViewModel = roleViewModel,
+            hostViewModel = hostViewModel,
+            isDark = isDark,
+            onToggleTheme = { isDark = !isDark },
+            discoveredHosts = discoveredHosts,
+            onStartHost = {
+                hostViewModel.setHostMode(HostServer(helper), discoveryService)
+            },
+            onConnectToHost = { ip ->
+                hostViewModel.setClientMode(ip, SyncClient(ip), discoveryService)
+            }
+        )
     }
 }

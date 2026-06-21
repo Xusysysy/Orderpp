@@ -5,17 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.opp.oder.data.repository.TableRepository
 import com.opp.oder.data.db.entity.TableEntity
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class TableViewModel(
     private val repository: TableRepository
 ) : ViewModel() {
 
-    val tables: StateFlow<List<TableEntity>> = repository.getAll()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _tables = MutableStateFlow<List<TableEntity>>(emptyList())
+    val tables: StateFlow<List<TableEntity>> = _tables
 
     private val _selectedTableId = MutableStateFlow<Long?>(null)
     val selectedTableId: StateFlow<Long?> = _selectedTableId
@@ -24,10 +22,14 @@ class TableViewModel(
     val zones: StateFlow<List<String>> = _zones
 
     init {
+        loadTables()
+    }
+
+    private fun loadTables() {
         viewModelScope.launch {
-            tables.collect { list ->
-                _zones.value = list.map { it.zone }.distinct()
-            }
+            val list = repository.getAllDirect()
+            _tables.value = list
+            _zones.value = list.map { it.zone }.distinct()
         }
     }
 
@@ -38,12 +40,14 @@ class TableViewModel(
     fun addTable(name: String, zone: String = "大厅") {
         viewModelScope.launch {
             repository.insert(TableEntity(name = name, zone = zone))
+            loadTables()
         }
     }
 
     fun updateTable(table: TableEntity) {
         viewModelScope.launch {
             repository.update(table)
+            loadTables()
         }
     }
 
@@ -53,12 +57,14 @@ class TableViewModel(
             if (_selectedTableId.value == id) {
                 _selectedTableId.value = null
             }
+            loadTables()
         }
     }
 
     fun createDefaults() {
         viewModelScope.launch {
             repository.createDefaultTables()
+            loadTables()
         }
     }
 }
