@@ -134,7 +134,7 @@ fun RecipeSheet(
                                     addBtnX = pos.x.roundToInt()
                                     addBtnY = pos.y.roundToInt()
                                 }
-                                .size(36.dp)
+                                .size(28.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable { onAddClick(addBtnX, addBtnY) },
@@ -142,7 +142,7 @@ fun RecipeSheet(
                         ) {
                             Text(
                                 text = "+",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 textAlign = TextAlign.Center
                             )
