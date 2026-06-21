@@ -91,16 +91,15 @@ fun MenuCard(
                                     val pos = coords.positionInWindow()
                                     addBtnX = pos.x.roundToInt()
                                     addBtnY = pos.y.roundToInt()
-                                },
+                                }
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { onAddClick(addBtnX, addBtnY) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "+",
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                                    .clickable { onAddClick(addBtnX, addBtnY) },
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 textAlign = TextAlign.Center

@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.opp.oder.data.db.entity.MenuItemEntity
 import com.opp.oder.data.db.entity.OrderItemEntity
 import com.opp.oder.data.db.entity.TableEntity
@@ -149,9 +150,16 @@ fun MainScreen(
         val item = flyItem ?: return@LaunchedEffect
         flyAnimX.snapTo(flySourceX.toFloat())
         flyAnimY.snapTo(flySourceY.toFloat())
-        flyAnimX.animateTo(billBtnX.toFloat() + 12f, animationSpec = tween(400))
-        flyAnimY.animateTo(billBtnY.toFloat() + 12f, animationSpec = tween(400))
+        flyAnimY.animateTo(flySourceY.toFloat() - 160f, animationSpec = tween(180))
+        launch { flyAnimX.animateTo(billBtnX.toFloat() + 12f, animationSpec = tween(220)) }
+        flyAnimY.animateTo(billBtnY.toFloat() + 12f, animationSpec = tween(220))
         flyItem = null
+    }
+
+    LaunchedEffect(role, selectedTableId) {
+        if (!isStaff && selectedTableId == null) {
+            showTableDrawer = true
+        }
     }
 
     fun handleGuestAdd(item: MenuItemEntity, sourceX: Int, sourceY: Int) {
