@@ -81,6 +81,12 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - If the user explicitly says to skip or do something else first, follow that instead.
 - Never force push. If push fails (e.g., no remote, no permission), report the error and continue.
 
+## 7. Prefer Edit Over Write + Sync STRUCTURE.md
+
+**Prefer modifying files with the Edit tool rather than rewriting entire files. Only use Write when creating new files or when the scope of changes exceeds 50% of the file.**
+
+**After any structural change (new/removed files, changed component responsibilities, navigation flow updates), sync the changes to `STRUCTURE.md`.**
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
