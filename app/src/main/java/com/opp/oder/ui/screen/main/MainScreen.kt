@@ -1,9 +1,15 @@
 package com.opp.oder.ui.screen.main
 
 import android.net.nsd.NsdServiceInfo
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,7 +23,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,8 +34,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,17 +59,24 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.opp.oder.data.db.entity.MenuItemEntity
@@ -72,6 +90,7 @@ import com.opp.oder.viewmodel.MenuViewModel
 import com.opp.oder.viewmodel.OrderViewModel
 import com.opp.oder.viewmodel.RoleViewModel
 import com.opp.oder.viewmodel.TableViewModel
+import kotlin.math.roundToInt
 
 private val CN_NUMS = listOf("零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
     "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
@@ -118,8 +137,37 @@ fun MainScreen(
     var pinInput by remember { mutableStateOf("") }
     val pinError by roleViewModel.pinError.collectAsStateWithLifecycle()
 
+    var flyItem by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var flySourceX by remember { mutableIntStateOf(0) }
+    var flySourceY by remember { mutableIntStateOf(0) }
+    var billBtnX by remember { mutableIntStateOf(0) }
+    var billBtnY by remember { mutableIntStateOf(0) }
+    val flyAnimX = remember { Animatable(0f) }
+    val flyAnimY = remember { Animatable(0f) }
+
     val selectedTable = tables.find { it.id == selectedTableId }
     val isStaff = role == RoleViewModel.Role.STAFF
+    val orderItems = currentOrder?.items ?: emptyList()
+    val orderQuantities = orderItems.associate { it.menuItemId to it.quantity }
+    val orderItemMap = orderItems.associateBy { it.menuItemId }
+    val totalItemCount = orderItems.sumOf { it.quantity }
+
+    LaunchedEffect(flyItem) {
+        val item = flyItem ?: return@LaunchedEffect
+        flyAnimX.snapTo(flySourceX.toFloat())
+        flyAnimY.snapTo(flySourceY.toFloat())
+        flyAnimX.animateTo(billBtnX.toFloat() + 12f, animationSpec = tween(400))
+        flyAnimY.animateTo(billBtnY.toFloat() + 12f, animationSpec = tween(400))
+        flyItem = null
+    }
+
+    fun handleGuestAdd(item: MenuItemEntity, sourceX: Int, sourceY: Int) {
+        flyItem = item
+        flySourceX = sourceX
+        flySourceY = sourceY
+        selectedTab = Tab.MENU
+        menuViewModel.dismissSheet()
+    }
 
     if (showSettings) {
         SettingsPage(
@@ -154,114 +202,187 @@ fun MainScreen(
             onBack = { showSettings = false }
         )
     } else {
-        Scaffold(
-            modifier = modifier,
-            bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 4.dp
-                ) {
-                    NavigationBarItem(
-                        selected = selectedTab == Tab.MENU,
-                        onClick = { selectedTab = Tab.MENU },
-                        icon = { Text("🍽", style = MaterialTheme.typography.titleLarge) },
-                        label = { Text("菜单") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                modifier = modifier,
+                bottomBar = {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 4.dp
+                    ) {
+                        NavigationBarItem(
+                            selected = selectedTab == Tab.MENU,
+                            onClick = { selectedTab = Tab.MENU },
+                            icon = { Text("🍽", style = MaterialTheme.typography.titleLarge) },
+                            label = { Text("菜单") },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            )
                         )
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == Tab.BILL,
-                        onClick = { selectedTab = Tab.BILL },
-                        icon = { Text("📋", style = MaterialTheme.typography.titleLarge) },
-                        label = { Text("账单") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        NavigationBarItem(
+                            selected = selectedTab == Tab.BILL,
+                            onClick = { selectedTab = Tab.BILL },
+                            icon = {
+                                Box(modifier = Modifier.onGloballyPositioned { coords ->
+                                    val pos = coords.positionInWindow()
+                                    billBtnX = pos.x.roundToInt()
+                                    billBtnY = pos.y.roundToInt()
+                                }) {
+                                    BadgedBox(badge = {
+                                        if (totalItemCount > 0) {
+                                            Badge(containerColor = MaterialTheme.colorScheme.error) {
+                                                Text("$totalItemCount", fontSize = 11.sp)
+                                            }
+                                        }
+                                    }) {
+                                        Text("📋", style = MaterialTheme.typography.titleLarge)
+                                    }
+                                }
+                            },
+                            label = { Text("账单") },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            )
                         )
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == Tab.MY,
-                        onClick = { selectedTab = Tab.MY },
-                        icon = { Text("👤", style = MaterialTheme.typography.titleLarge) },
-                        label = { Text("我的") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        NavigationBarItem(
+                            selected = selectedTab == Tab.MY,
+                            onClick = { selectedTab = Tab.MY },
+                            icon = { Text("👤", style = MaterialTheme.typography.titleLarge) },
+                            label = { Text("我的") },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            )
                         )
+                    }
+                }
+            ) { innerPadding ->
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        slideInHorizontally(tween(300)) { it } + fadeIn(tween(200)) togetherWith
+                                slideOutHorizontally(tween(300)) { -it } + fadeOut(tween(200))
+                    },
+                    modifier = Modifier.padding(innerPadding),
+                    label = "tab_transition"
+                ) { tab ->
+                    when (tab) {
+                        Tab.MENU -> MenuTabContent(
+                            tables = tables,
+                            selectedTableId = selectedTableId,
+                            selectedTable = selectedTable,
+                            isStaff = isStaff,
+                            menuItems = menuItems,
+                            currentOrder = currentOrder,
+                            totalPrice = totalPrice,
+                            orderQuantities = orderQuantities,
+                            orderItemMap = orderItemMap,
+                            totalItemCount = totalItemCount,
+                            onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
+                            onShowTableDrawer = { showTableDrawer = true },
+                            onItemClick = { if (it.hasRecipe) menuViewModel.selectItem(it) },
+                            onAddToOrder = { item -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) } },
+                            onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
+                            onSettle = { orderViewModel.settleOrder() },
+                            onGuestAdd = { item, x, y -> handleGuestAdd(item, x, y) },
+                            onSwitchToBill = { selectedTab = Tab.BILL }
+                        )
+                        Tab.BILL -> BillTabContent(
+                            currentOrder = currentOrder,
+                            totalPrice = totalPrice,
+                            menuItems = menuItems,
+                            isStaff = isStaff,
+                            selectedTableId = selectedTableId,
+                            selectedTableName = selectedTable?.name,
+                            onAddItem = { menuId, name, price -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, menuId, name, price) } },
+                            onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
+                            onSettle = { orderViewModel.settleOrder() },
+                            onSelectMenuItem = { if (it.hasRecipe) menuViewModel.selectItem(it) }
+                        )
+                        Tab.MY -> MyTabContent(
+                            role = role,
+                            onOpenSettings = { showSettings = true }
+                        )
+                    }
+                }
+            }
+
+            if (flyItem != null) {
+                Box(modifier = Modifier.fillMaxSize().zIndex(3f)) {
+                    Text(
+                        text = "+",
+                        modifier = Modifier
+                            .offset { IntOffset(
+                                flyAnimX.value.roundToInt(),
+                                flyAnimY.value.roundToInt()) }
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
-        ) { innerPadding ->
-            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                when (selectedTab) {
-                    Tab.MENU -> MenuTabContent(
-                        tables = tables,
-                        selectedTableId = selectedTableId,
-                        selectedTable = selectedTable,
-                        isStaff = isStaff,
-                        menuItems = menuItems,
-                        currentOrder = currentOrder,
-                        totalPrice = totalPrice,
-                        onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
-                        onShowTableDrawer = { showTableDrawer = true },
-                        onItemClick = { if (it.hasRecipe) menuViewModel.selectItem(it) },
-                        onAddToOrder = { item -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) } },
-                        onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
-                        onSettle = { orderViewModel.settleOrder() }
-                    )
-                    Tab.BILL -> BillTabContent(
-                        currentOrder = currentOrder,
-                        totalPrice = totalPrice,
-                        menuItems = menuItems,
-                        isStaff = isStaff,
-                        selectedTableId = selectedTableId,
-                        selectedTableName = selectedTable?.name,
-                        onAddItem = { menuId, name, price -> selectedTableId?.let { tid -> orderViewModel.addItem(tid, menuId, name, price) } },
-                        onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
-                        onSettle = { orderViewModel.settleOrder() },
-                        onSelectMenuItem = { if (it.hasRecipe) menuViewModel.selectItem(it) }
-                    )
-                    Tab.MY -> MyTabContent(
-                        role = role,
-                        onOpenSettings = { showSettings = true }
-                    )
-                }
 
-                AnimatedVisibility(
-                    visible = showTableDrawer,
-                    enter = slideInHorizontally(initialOffsetX = { -it }),
-                    exit = slideOutHorizontally(targetOffsetX = { -it }),
-                    modifier = Modifier.zIndex(2f).fillMaxHeight()
-                ) {
-                    TableDrawer(
-                        tables = tables,
-                        selectedTableId = selectedTableId,
-                        zones = zones,
-                        isStaff = isStaff,
-                        onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
-                        onAddTable = { name -> tableViewModel.addTable(name) },
-                        onDeleteTable = { table -> tableViewModel.deleteTable(table.id) },
-                        onDismiss = { showTableDrawer = false }
-                    )
-                }
+            AnimatedVisibility(
+                visible = showTableDrawer,
+                enter = slideInHorizontally(initialOffsetX = { -it }),
+                exit = slideOutHorizontally(targetOffsetX = { -it }),
+                modifier = Modifier.zIndex(2f).fillMaxHeight()
+            ) {
+                TableDrawer(
+                    tables = tables,
+                    selectedTableId = selectedTableId,
+                    zones = zones,
+                    isStaff = isStaff,
+                    onSelectTable = { table -> tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id); showTableDrawer = false },
+                    onAddTable = { name -> tableViewModel.addTable(name) },
+                    onDeleteTable = { table -> tableViewModel.deleteTable(table.id) },
+                    onDismiss = { showTableDrawer = false }
+                )
+            }
 
-                if (showTableDrawer) {
-                    Box(
-                        modifier = Modifier.fillMaxSize().zIndex(1f)
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showTableDrawer = false }
-                    )
-                }
+            if (showTableDrawer) {
+                Box(
+                    modifier = Modifier.fillMaxSize().zIndex(1f)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showTableDrawer = false }
+                )
             }
         }
     }
 
     if (sheetVisible) {
-        RecipeSheet(item = selectedMenuItem, steps = recipeSteps, ingredients = recipeIngredients, onDismiss = { menuViewModel.dismissSheet() })
+        RecipeSheet(
+            item = selectedMenuItem,
+            steps = recipeSteps,
+            ingredients = recipeIngredients,
+            onDismiss = { menuViewModel.dismissSheet() },
+            isStaff = isStaff,
+            orderQuantity = selectedMenuItem?.let { orderQuantities[it.id] } ?: 0,
+            onAddClick = { x, y ->
+                val item = selectedMenuItem ?: return@RecipeSheet
+                selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
+                flyItem = item
+                flySourceX = x
+                flySourceY = y
+                selectedTab = Tab.MENU
+                menuViewModel.dismissSheet()
+            },
+            onIncrement = {
+                val item = selectedMenuItem ?: return@RecipeSheet
+                orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, 1) }
+            },
+            onDecrement = {
+                val item = selectedMenuItem ?: return@RecipeSheet
+                orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, -1) }
+            }
+        )
     }
 }
 
@@ -352,12 +473,17 @@ private fun MenuTabContent(
     menuItems: List<MenuItemEntity>,
     currentOrder: com.opp.oder.data.db.dao.OrderWithItems?,
     totalPrice: Double,
+    orderQuantities: Map<Long, Int>,
+    orderItemMap: Map<Long, OrderItemEntity>,
+    totalItemCount: Int,
     onSelectTable: (TableEntity) -> Unit,
     onShowTableDrawer: () -> Unit,
     onItemClick: (MenuItemEntity) -> Unit,
     onAddToOrder: (MenuItemEntity) -> Unit,
     onUpdateQuantity: (OrderItemEntity, Int) -> Unit,
-    onSettle: () -> Unit
+    onSettle: () -> Unit,
+    onGuestAdd: (MenuItemEntity, Int, Int) -> Unit,
+    onSwitchToBill: () -> Unit
 ) {
     val categories = menuItems.map { it.category }.distinct()
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "") }
@@ -398,11 +524,18 @@ private fun MenuTabContent(
             if (order != null && order.items.isNotEmpty()) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("当前订单", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+                        if (!isStaff) {
+                            TextButton(onClick = onSwitchToBill) {
+                                Text("查看账单 ▸", color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
                     }
                     LazyColumn(
                         modifier = Modifier.weight(1f),
@@ -465,10 +598,21 @@ private fun MenuTabContent(
                             modifier = Modifier.weight(1f)
                         ) {
                             gridItems(filteredItems) { item ->
-                                MenuCard(item = item, onClick = {
-                                    if (isStaff) onAddToOrder(item)
-                                    onItemClick(item)
-                                })
+                                MenuCard(
+                                    item = item,
+                                    onClick = {
+                                        if (isStaff) onAddToOrder(item)
+                                        onItemClick(item)
+                                    },
+                                    showAddButton = !isStaff,
+                                    orderQuantity = orderQuantities[item.id] ?: 0,
+                                    onAddClick = { x, y ->
+                                        selectedTableId?.let { onAddToOrder(item) }
+                                        onGuestAdd(item, x, y)
+                                    },
+                                    onIncrement = { orderItemMap[item.id]?.let { onUpdateQuantity(it, 1) } },
+                                    onDecrement = { orderItemMap[item.id]?.let { onUpdateQuantity(it, -1) } }
+                                )
                             }
                         }
                     }
