@@ -723,7 +723,7 @@ private fun SettingsPage(
             Spacer(Modifier.height(40.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
             Spacer(Modifier.height(16.dp))
-            Text("Oder++ v1.0.0",
+            Text("Oder++ v1.0.2",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                 modifier = Modifier.fillMaxWidth(),
