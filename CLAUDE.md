@@ -64,6 +64,23 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. APK Location After Build
+
+**After every successful `assembleDebug` build, output the APK path:**
+
+```
+喵APK 位置: app\build\outputs\apk\debug\app-debug.apk
+```
+
+## 6. Auto Git Push After Build
+
+**When the user continues conversation after a build (with no explicit instruction to skip), first commit and push to preserve changes:**
+
+- If there are uncommitted changes, create a commit with a concise message summarizing the changes made in the previous turn.
+- Then run `git push`.
+- If the user explicitly says to skip or do something else first, follow that instead.
+- Never force push. If push fails (e.g., no remote, no permission), report the error and continue.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

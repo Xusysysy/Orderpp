@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +43,6 @@ import com.opp.oder.network.HostServer
 import com.opp.oder.network.SyncClient
 import com.opp.oder.ui.screen.RoleSelectScreen
 import com.opp.oder.ui.screen.main.MainScreen
-import com.opp.oder.ui.screen.main.SettingsSheet
 import com.opp.oder.ui.theme.OderTheme
 import com.opp.oder.util.LogWriter
 import com.opp.oder.viewmodel.HostViewModel
@@ -103,7 +103,6 @@ private fun ErrorScreen(message: String) {
 private fun MainApp(helper: DatabaseHelper, app: OderApp) {
     var isDark by remember { mutableStateOf(true) }
     var currentScreen by remember { mutableStateOf(NavScreen.MAIN) }
-    var showSettings by remember { mutableStateOf(false) }
 
     OderTheme(darkTheme = isDark) {
         when (currentScreen) {
@@ -139,33 +138,30 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                 val discoveryService = remember { DiscoveryService(app) }
                 val role by roleViewModel.role.collectAsStateWithLifecycle()
 
-                MainScreen(
-                    tableViewModel = tableViewModel, menuViewModel = menuViewModel, orderViewModel = orderViewModel,
-                    roleViewModel = roleViewModel,
-                    onOpenSettings = { showSettings = true }
-                )
-                if (showSettings) {
-                    SettingsSheet(
-                        isDark = isDark,
-                        onToggleTheme = { isDark = !isDark },
-                        role = role,
-                        roleViewModel = roleViewModel,
-                        hostViewModel = hostViewModel,
-                        discoveredHosts = discoveredHosts,
-                        onStartHost = {
-                            hostViewModel.setHostMode(HostServer(helper), discoveryService)
-                            showSettings = false
-                        },
-                        onConnectToHost = { ip ->
-                            hostViewModel.setClientMode(ip, SyncClient(ip), discoveryService)
-                            showSettings = false
-                        },
-                        onSwitchRole = { currentScreen = NavScreen.ROLE_SELECT },
-                        onDismiss = { showSettings = false }
-                    )
+                LaunchedEffect(Unit) {
                     discoveryService.startDiscovery()
-                    discoveryService.onHostDiscovered = { info -> if (discoveredHosts.none { it.serviceName == info.serviceName }) discoveredHosts.add(info) }
+                    discoveryService.onHostDiscovered = { info ->
+                        if (discoveredHosts.none { it.serviceName == info.serviceName }) discoveredHosts.add(info)
+                    }
                 }
+
+                MainScreen(
+                    tableViewModel = tableViewModel,
+                    menuViewModel = menuViewModel,
+                    orderViewModel = orderViewModel,
+                    roleViewModel = roleViewModel,
+                    hostViewModel = hostViewModel,
+                    isDark = isDark,
+                    onToggleTheme = { isDark = !isDark },
+                    discoveredHosts = discoveredHosts,
+                    onStartHost = {
+                        hostViewModel.setHostMode(HostServer(helper), discoveryService)
+                    },
+                    onConnectToHost = { ip ->
+                        hostViewModel.setClientMode(ip, SyncClient(ip), discoveryService)
+                    },
+                    onSwitchRole = { currentScreen = NavScreen.ROLE_SELECT }
+                )
             }
         }
     }
