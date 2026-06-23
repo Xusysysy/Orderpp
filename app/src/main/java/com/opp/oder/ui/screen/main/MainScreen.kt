@@ -163,6 +163,13 @@ fun MainScreen(
     val pinError by roleViewModel.pinError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val currentHostMode by hostViewModel.mode.collectAsStateWithLifecycle()
+
+    LaunchedEffect(currentHostMode) {
+        if (currentHostMode == HostViewModel.Mode.HOST) {
+            snackbarHostState.showSnackbar("已作为主机")
+        }
+    }
 
     var flyItem by remember { mutableStateOf<MenuItemEntity?>(null) }
     var flySourceX by remember { mutableIntStateOf(0) }
