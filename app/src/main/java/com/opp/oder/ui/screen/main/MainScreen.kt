@@ -11,12 +11,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +31,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -83,6 +87,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -91,6 +96,8 @@ import kotlinx.coroutines.launch
 import com.opp.oder.data.db.dao.OrderBill
 import com.opp.oder.data.db.entity.MenuItemEntity
 import com.opp.oder.data.db.entity.OrderItemEntity
+import com.opp.oder.data.db.entity.RecipeIngredientEntity
+import com.opp.oder.data.db.entity.RecipeStepEntity
 import com.opp.oder.data.db.entity.TableEntity
 import com.opp.oder.ui.component.MenuCard
 import com.opp.oder.ui.component.QuantityStepper
@@ -145,6 +152,7 @@ fun MainScreen(
     val submittedOrders by orderViewModel.submittedOrders.collectAsStateWithLifecycle()
     val expandedOrderId by orderViewModel.expandedOrderId.collectAsStateWithLifecycle()
     val syncStatus by hostViewModel.syncStatus.collectAsStateWithLifecycle()
+    val isTablet = LocalConfiguration.current.screenWidthDp >= 600
 
     var selectedTab by remember { mutableStateOf(Tab.MENU) }
     var showTableDrawer by remember { mutableStateOf(false) }
@@ -170,6 +178,49 @@ fun MainScreen(
     val orderQuantities = orderItems.associate { it.menuItemId to it.quantity }
     val orderItemMap = orderItems.associateBy { it.menuItemId }
     val totalItemCount = orderItems.sumOf { it.quantity }
+
+    if (isTablet) {
+        TabletMainContent(
+            tables = tables,
+            selectedTableId = selectedTableId,
+            zones = zones,
+            menuItems = menuItems,
+            currentOrder = currentOrder,
+            totalPrice = totalPrice,
+            selectedMenuItem = selectedMenuItem,
+            recipeSteps = recipeSteps,
+            recipeIngredients = recipeIngredients,
+            sheetVisible = sheetVisible,
+            role = role,
+            allOrders = allOrders,
+            selectedBillId = selectedBillId,
+            activeOrderCount = activeOrderCount,
+            submittedOrders = submittedOrders,
+            expandedOrderId = expandedOrderId,
+            syncStatus = syncStatus,
+            hostMode = hostViewModel.mode.collectAsStateWithLifecycle().value,
+            connectedHostIp = hostViewModel.connectedHostIp.collectAsStateWithLifecycle().value,
+            connectedHostId = hostViewModel.connectedHostId.collectAsStateWithLifecycle().value,
+            hostIp = hostViewModel.hostIp.collectAsStateWithLifecycle().value,
+            orderQuantities = orderQuantities,
+            orderItemMap = orderItemMap,
+            totalItemCount = totalItemCount,
+            isStaff = isStaff,
+            isDark = isDark,
+            snackbarHostState = snackbarHostState,
+            scope = scope,
+            tableViewModel = tableViewModel,
+            menuViewModel = menuViewModel,
+            orderViewModel = orderViewModel,
+            roleViewModel = roleViewModel,
+            hostViewModel = hostViewModel,
+            discoveredHosts = discoveredHosts,
+            onToggleTheme = onToggleTheme,
+            onStartHost = onStartHost,
+            onConnectToHost = onConnectToHost
+        )
+        return
+    }
 
     LaunchedEffect(flyItem) {
         val item = flyItem ?: return@LaunchedEffect
@@ -486,6 +537,481 @@ fun MainScreen(
                 TextButton(onClick = { showHostPrompt = false }) { Text("暂不") }
             }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+private fun TabletMainContent(
+    tables: List<TableEntity>,
+    selectedTableId: Long?,
+    zones: List<String>,
+    menuItems: List<MenuItemEntity>,
+    currentOrder: com.opp.oder.data.db.dao.OrderWithItems?,
+    totalPrice: Double,
+    selectedMenuItem: MenuItemEntity?,
+    recipeSteps: List<RecipeStepEntity>,
+    recipeIngredients: List<RecipeIngredientEntity>,
+    sheetVisible: Boolean,
+    role: RoleViewModel.Role,
+    allOrders: List<com.opp.oder.data.db.dao.OrderBill>,
+    selectedBillId: Long?,
+    activeOrderCount: Int,
+    submittedOrders: List<com.opp.oder.data.db.dao.OrderWithItems>,
+    expandedOrderId: Long?,
+    syncStatus: HostViewModel.SyncStatus,
+    hostMode: HostViewModel.Mode,
+    connectedHostIp: String,
+    connectedHostId: String,
+    hostIp: String,
+    orderQuantities: Map<Long, Int>,
+    orderItemMap: Map<Long, OrderItemEntity>,
+    totalItemCount: Int,
+    isStaff: Boolean,
+    isDark: Boolean,
+    snackbarHostState: SnackbarHostState,
+    scope: kotlinx.coroutines.CoroutineScope,
+    tableViewModel: TableViewModel,
+    menuViewModel: MenuViewModel,
+    orderViewModel: OrderViewModel,
+    roleViewModel: RoleViewModel,
+    hostViewModel: HostViewModel,
+    discoveredHosts: List<NsdServiceInfo>,
+    onToggleTheme: () -> Unit,
+    onStartHost: () -> Unit,
+    onConnectToHost: (String) -> Unit
+) {
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    var showSettings by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pinInput by remember { mutableStateOf("") }
+    val pinError by roleViewModel.pinError.collectAsStateWithLifecycle()
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            when (page) {
+                0 -> {
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        // Left: Menu (2/3)
+                        Box(modifier = Modifier.weight(2f).fillMaxHeight()) {
+                            TabletMenuPanel(
+                                tables = tables,
+                                selectedTableId = selectedTableId,
+                                zones = zones,
+                                menuItems = menuItems,
+                                isStaff = isStaff,
+                                menuViewModel = menuViewModel,
+                                tableViewModel = tableViewModel,
+                                orderViewModel = orderViewModel,
+                                orderQuantities = orderQuantities,
+                                orderItemMap = orderItemMap
+                            )
+                        }
+                        // Right: Bill (1/3)
+                        Surface(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            tonalElevation = 4.dp
+                        ) {
+                            if (isStaff) {
+                                TabletStaffBillPanel(
+                                    allOrders = allOrders,
+                                    selectedBillId = selectedBillId,
+                                    onSelectBill = { orderViewModel.selectBill(it) },
+                                    onSettleBill = { orderViewModel.settleBill(it) }
+                                )
+                            } else {
+                                TabletGuestBillPanel(
+                                    currentOrder = currentOrder,
+                                    totalPrice = totalPrice,
+                                    submittedOrders = submittedOrders,
+                                    expandedOrderId = expandedOrderId,
+                                    orderViewModel = orderViewModel,
+                                    hostViewModel = hostViewModel
+                                )
+                            }
+                        }
+                    }
+                }
+                1 -> {
+                    MyTabContent(
+                        role = role,
+                        hostMode = hostMode,
+                        syncStatus = syncStatus,
+                        onOpenSettings = { showSettings = true }
+                    )
+                }
+            }
+        }
+    }
+
+    // Recipe sheet
+    if (sheetVisible) {
+        RecipeSheet(
+            item = selectedMenuItem,
+            steps = recipeSteps,
+            ingredients = recipeIngredients,
+            onDismiss = { menuViewModel.dismissSheet() },
+            isStaff = isStaff,
+            orderQuantity = selectedMenuItem?.let { orderQuantities[it.id] } ?: 0,
+            onAddClick = { _, _ ->
+                val item = selectedMenuItem ?: return@RecipeSheet
+                selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
+                menuViewModel.dismissSheet()
+            },
+            onIncrement = {
+                val item = selectedMenuItem ?: return@RecipeSheet
+                orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, 1) }
+            },
+            onDecrement = {
+                val item = selectedMenuItem ?: return@RecipeSheet
+                orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, -1) }
+            },
+            onSaveRecipe = { steps, ingredients ->
+                val item = selectedMenuItem ?: return@RecipeSheet
+                menuViewModel.saveRecipe(item.id, steps, ingredients)
+            }
+        )
+    }
+
+    // Settings page
+    AnimatedVisibility(
+        visible = showSettings,
+        enter = slideInHorizontally(tween(300)) { it } + fadeIn(tween(200)),
+        exit = slideOutHorizontally(tween(300)) { it } + fadeOut(tween(200))
+    ) {
+        SettingsPage(
+            isDark = isDark,
+            onToggleTheme = onToggleTheme,
+            role = role,
+            roleViewModel = roleViewModel,
+            hostViewModel = hostViewModel,
+            discoveredHosts = discoveredHosts,
+            onStartHost = onStartHost,
+            onConnectToHost = onConnectToHost,
+            showPinDialog = showPinDialog,
+            pinInput = pinInput,
+            pinError = pinError,
+            onRequestStaffMode = { showPinDialog = true },
+            onRequestGuestMode = {
+                roleViewModel.selectRole(RoleViewModel.Role.GUEST)
+                showSettings = false
+            },
+            onDismissPinDialog = {
+                showPinDialog = false; pinInput = ""; roleViewModel.resetPinError()
+            },
+            onPinInputChange = { pinInput = it.take(4); roleViewModel.resetPinError() },
+            onConfirmPin = {
+                if (roleViewModel.verifyPin(pinInput)) {
+                    roleViewModel.selectRole(RoleViewModel.Role.STAFF)
+                    showPinDialog = false
+                    pinInput = ""
+                    showSettings = false
+                }
+            },
+            onBack = { showSettings = false }
+        )
+    }
+}
+
+@Composable
+private fun TabletMenuPanel(
+    tables: List<TableEntity>,
+    selectedTableId: Long?,
+    zones: List<String>,
+    menuItems: List<MenuItemEntity>,
+    isStaff: Boolean,
+    menuViewModel: MenuViewModel,
+    tableViewModel: TableViewModel,
+    orderViewModel: OrderViewModel,
+    orderQuantities: Map<Long, Int>,
+    orderItemMap: Map<Long, OrderItemEntity>
+) {
+    val categories = menuItems.map { it.category }.distinct()
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "") }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editingItem by remember { mutableStateOf<MenuItemEntity?>(null) }
+    var showTableDrawer by remember { mutableStateOf(false) }
+
+    LaunchedEffect(categories) {
+        if (selectedCategory.isEmpty() && categories.isNotEmpty()) {
+            selectedCategory = categories.first()
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (isStaff) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("桌位", modifier = Modifier.clickable { showTableDrawer = !showTableDrawer }
+                    .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = { editingItem = null; showEditDialog = true }) {
+                    Text("+ 添加菜品", color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+        } else {
+            val tableLabel = if (selectedTableId != null) tables.find { it.id == selectedTableId }?.name ?: "" else "选择桌位"
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(tableLabel, modifier = Modifier.clickable { showTableDrawer = !showTableDrawer }
+                    .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.weight(1f))
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+        }
+
+        if (!isStaff && selectedTableId == null) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("请先选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+            }
+        } else {
+            if (showTableDrawer) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    zones.forEach { zone ->
+                        if (zone.isNotEmpty()) {
+                            item { Text(zone, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 4.dp)) }
+                        }
+                        items(tables.filter { it.zone == zone }) { table ->
+                            FilterChip(selected = table.id == selectedTableId, onClick = {
+                                if (!isStaff) { tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id) }
+                                showTableDrawer = false
+                            }, label = { Text(table.name) })
+                        }
+                    }
+                }
+            }
+            LazyRow(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(categories) { cat ->
+                    val label = categoryLabel(cat)
+                    FilterChip(selected = cat == selectedCategory, onClick = { selectedCategory = cat }, label = { Text(label) })
+                }
+            }
+            val filteredItems = menuItems.filter { it.category == selectedCategory }
+            if (filteredItems.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                    Text("暂无菜单项", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 160.dp),
+                    contentPadding = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    gridItems(filteredItems) { item ->
+                        Box {
+                            MenuCard(
+                                item = item,
+                                onClick = {
+                                    if (isStaff) {
+                                        menuViewModel.selectItem(item)
+                                    } else {
+                                        if (item.hasRecipe) menuViewModel.selectItem(item)
+                                        else selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
+                                    }
+                                },
+                                showAddButton = !isStaff,
+                                orderQuantity = orderQuantities[item.id] ?: 0,
+                                onAddClick = { _, _ ->
+                                    selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
+                                },
+                                onIncrement = { orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, 1) } },
+                                onDecrement = { orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, -1) } }
+                            )
+                            if (isStaff) {
+                                TextButton(
+                                    onClick = { editingItem = item; showEditDialog = true },
+                                    modifier = Modifier.align(Alignment.TopEnd)
+                                ) { Text("✏", fontSize = 12.sp) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showEditDialog) {
+        MenuItemEditDialog(
+            editingItem = editingItem,
+            allCategories = categories,
+            onDismiss = { showEditDialog = false },
+            onSave = { item ->
+                if (editingItem != null) menuViewModel.updateItem(item)
+                else menuViewModel.addItem(item)
+                showEditDialog = false
+            },
+            onDelete = if (editingItem != null) {
+                { menuViewModel.deleteItem(editingItem!!.id); showEditDialog = false }
+            } else null
+        )
+    }
+}
+
+@Composable
+private fun TabletStaffBillPanel(
+    allOrders: List<com.opp.oder.data.db.dao.OrderBill>,
+    selectedBillId: Long?,
+    onSelectBill: (Long) -> Unit,
+    onSettleBill: (Long) -> Unit
+) {
+    if (allOrders.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("暂无订单", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(allOrders, key = { it.orderId }) { bill ->
+                val isSelected = bill.orderId == selectedBillId
+                val isSettled = bill.status == "SETTLED"
+                Card(
+                    modifier = Modifier.fillMaxWidth().animateItem().then(
+                        if (!isSettled) Modifier.clickable { onSelectBill(bill.orderId) } else Modifier
+                    ),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when {
+                            isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            isSettled -> MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
+                            else -> MaterialTheme.colorScheme.surface
+                        }
+                    ),
+                    border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(bill.tableName, style = MaterialTheme.typography.bodyMedium, color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface)
+                            Text(if (isSettled) "已结账" else "${bill.itemCount}件 ¥%.0f".format(bill.totalPrice), style = MaterialTheme.typography.bodySmall, color = if (isSettled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primary)
+                        }
+                        if (isSelected && !isSettled) {
+                            Spacer(Modifier.height(4.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+                            bill.items.forEach { item ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                                    Text(item.name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                    Text("x${item.quantity}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                }
+                            }
+                            Button(onClick = { onSettleBill(bill.orderId) }, modifier = Modifier.fillMaxWidth().height(40.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                                Text("结账", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabletGuestBillPanel(
+    currentOrder: com.opp.oder.data.db.dao.OrderWithItems?,
+    totalPrice: Double,
+    submittedOrders: List<com.opp.oder.data.db.dao.OrderWithItems>,
+    expandedOrderId: Long?,
+    orderViewModel: OrderViewModel,
+    hostViewModel: HostViewModel
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Text("账单", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+        Spacer(Modifier.height(8.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (currentOrder != null && currentOrder.items.isNotEmpty()) {
+                item(key = "active") {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("当前", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                Text("¥%.0f".format(totalPrice), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                            currentOrder.items.forEach { item ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("¥%.0f".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                    }
+                                    QuantityStepper(quantity = item.quantity,
+                                        onIncrement = { orderViewModel.updateQuantity(item, 1) },
+                                        onDecrement = { orderViewModel.updateQuantity(item, -1) })
+                                }
+                            }
+                            Button(onClick = {
+                                val items = currentOrder.items.map {
+                                    com.opp.oder.network.ApiOrderItemRequest(it.menuItemId, it.name, it.quantity, it.price)
+                                }
+                                hostViewModel.submitOrder(currentOrder.order.tableId, items)
+                                orderViewModel.submitCurrentOrder()
+                            }, modifier = Modifier.fillMaxWidth().height(36.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                                Text("提交", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+            if (submittedOrders.isNotEmpty()) {
+                item(key = "submitted_header") { Text("已提交", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)) }
+                items(submittedOrders, key = { it.order.id }) { sub ->
+                    val isExpanded = sub.order.id == expandedOrderId
+                    Card(modifier = Modifier.fillMaxWidth().animateItem().clickable { orderViewModel.toggleExpand(sub.order.id) },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("${sub.items.size}件", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text(if (isExpanded) "▲" else "▼", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                            if (isExpanded) {
+                                sub.items.forEach { item ->
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(item.name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                        QuantityStepper(quantity = item.quantity,
+                                            onIncrement = { orderViewModel.updateSubmittedQty(sub.order.id, item, 1) },
+                                            onDecrement = { orderViewModel.updateSubmittedQty(sub.order.id, item, -1) })
+                                    }
+                                }
+                                Button(onClick = { orderViewModel.resubmitOrder(sub, hostViewModel) },
+                                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                                    Text("重新提交", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if ((currentOrder == null || currentOrder.items.isEmpty()) && submittedOrders.isEmpty()) {
+                item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Text("空", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)) } }
+            }
+        }
     }
 }
 

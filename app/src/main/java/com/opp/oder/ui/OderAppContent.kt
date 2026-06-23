@@ -295,10 +295,16 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                         }) { androidx.compose.material3.Text("手动连接") }
                     },
                     dismissButton = {
-                        androidx.compose.material3.TextButton(onClick = {
-                            showConnectPrompt = false
-                            hasAutoPrompted = false
-                        }) { androidx.compose.material3.Text("继续搜索") }
+                        androidx.compose.foundation.layout.Row {
+                            androidx.compose.material3.TextButton(onClick = {
+                                showConnectPrompt = false
+                                hasAutoPrompted = false
+                            }) { androidx.compose.material3.Text("继续搜索") }
+                            androidx.compose.material3.Button(onClick = {
+                                showConnectPrompt = false
+                                hostViewModel.setHostMode(HostServer(helper), discoveryService)
+                            }) { androidx.compose.material3.Text("作为主机") }
+                        }
                     }
                 )
             }

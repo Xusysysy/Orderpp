@@ -147,6 +147,10 @@ class OrderViewModel(
     }
 
     fun resubmitOrder(order: OrderWithItems, hostViewModel: HostViewModel) {
+        if (order.items.isEmpty()) {
+            removeSubmittedOrder(order.order.id)
+            return
+        }
         val items = order.items.map {
             com.opp.oder.network.ApiOrderItemRequest(it.menuItemId, it.name, it.quantity, it.price)
         }
