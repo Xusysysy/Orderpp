@@ -51,7 +51,7 @@ android {
     }
     lint {
         checkReleaseBuilds = false
-}
+    }
 }
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
@@ -79,4 +79,25 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+tasks.register("setupAdbForward") {
+    group = "oder"
+    description = "Auto-setup ADB port forwarding for emulator LAN sync"
+
+    doLast {
+        val script = rootProject.file("scripts/adb_forward.ps1")
+        if (script.exists()) {
+            try {
+                ProcessBuilder("powershell", "-ExecutionPolicy", "Bypass", "-File", script.absolutePath)
+                    .inheritIO()
+                    .start()
+                    .waitFor()
+            } catch (_: Exception) {}
+        }
+    }
+}
+
+tasks.matching { it.name == "installDebug" || it.name == "installRelease" }.configureEach {
+    dependsOn("setupAdbForward")
 }

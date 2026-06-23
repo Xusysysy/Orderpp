@@ -28,7 +28,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import com.opp.oder.data.db.entity.MenuItemEntity
+import com.opp.oder.ui.theme.OderPreview
+import com.opp.oder.ui.theme.OderPreviewLight
 import kotlin.math.roundToInt
 
 @Composable
@@ -92,7 +95,7 @@ fun MenuCard(
                                     addBtnX = pos.x.roundToInt()
                                     addBtnY = pos.y.roundToInt()
                                 }
-                                .size(28.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable { onAddClick(addBtnX, addBtnY) },
@@ -108,6 +111,44 @@ fun MenuCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MenuCardPreview() {
+    OderPreview {
+        Column(Modifier.padding(16.dp)) {
+            MenuCard(
+                item = MenuItemEntity(id = 1, name = "莫吉托", price = 58.0),
+                onClick = {}
+            )
+            MenuCard(
+                item = MenuItemEntity(id = 2, name = "薯条", price = 28.0, hasRecipe = true),
+                onClick = {}
+            )
+            MenuCard(
+                item = MenuItemEntity(id = 3, name = "长岛冰茶", price = 68.0),
+                showAddButton = true,
+                orderQuantity = 2,
+                onClick = {},
+                onIncrement = {},
+                onDecrement = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "MenuCard Light")
+@Composable
+private fun MenuCardPreviewLight() {
+    OderPreviewLight {
+        Column(Modifier.padding(16.dp)) {
+            MenuCard(
+                item = MenuItemEntity(id = 1, name = "莫吉托", price = 58.0),
+                onClick = {}
+            )
         }
     }
 }

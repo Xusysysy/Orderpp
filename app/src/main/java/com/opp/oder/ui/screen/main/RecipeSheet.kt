@@ -1,5 +1,8 @@
 package com.opp.oder.ui.screen.main
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,11 +27,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +48,8 @@ import com.opp.oder.data.db.entity.RecipeIngredientEntity
 import com.opp.oder.data.db.entity.RecipeStepEntity
 import com.opp.oder.ui.component.QuantityStepper
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,12 +68,14 @@ fun RecipeSheet(
     var addBtnX by remember { mutableIntStateOf(0) }
     var addBtnY by remember { mutableIntStateOf(0) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val editSteps = remember { mutableStateListOf<RecipeStepEntity>().also { it.addAll(steps) } }
-    val editIngredients = remember { mutableStateListOf<RecipeIngredientEntity>().also { it.addAll(ingredients) } }
+    val editSteps = remember(steps) { mutableStateListOf<RecipeStepEntity>().also { it.addAll(steps) } }
+    val editIngredients = remember(ingredients) { mutableStateListOf<RecipeIngredientEntity>().also { it.addAll(ingredients) } }
     var newStepText by remember { mutableStateOf("") }
     var newIngName by remember { mutableStateOf("") }
     var newIngAmount by remember { mutableStateOf("") }
     var newIngUnit by remember { mutableStateOf("") }
+    var showSaved by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -226,9 +235,23 @@ fun RecipeSheet(
                 HorizontalDivider()
                 Spacer(Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    AnimatedVisibility(
+                        visible = showSaved,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Text("已保存", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Spacer(Modifier.width(8.dp))
                     TextButton(onClick = {
                         val updatedSteps = editSteps.mapIndexed { i, s -> s.copy(stepNumber = i + 1) }
                         onSaveRecipe(updatedSteps, editIngredients.toList())
+                        showSaved = true
+                        scope.launch {
+                            delay(800)
+                            showSaved = false
+                            onDismiss()
+                        }
                     }) {
                         Text("保存配方", color = MaterialTheme.colorScheme.primary)
                     }
@@ -258,7 +281,7 @@ fun RecipeSheet(
                                     addBtnX = pos.x.roundToInt()
                                     addBtnY = pos.y.roundToInt()
                                 }
-                                .size(28.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable { onAddClick(addBtnX, addBtnY) },

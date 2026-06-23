@@ -10,6 +10,8 @@ import com.opp.oder.network.DiscoveryService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.net.NetworkInterface
+import java.net.Inet4Address
 
 class HostViewModel : ViewModel() {
     enum class Mode { HOST, CLIENT, NONE }
@@ -20,6 +22,9 @@ class HostViewModel : ViewModel() {
 
     private val _clientIp = MutableStateFlow("")
     val clientIp: StateFlow<String> = _clientIp
+
+    private val _hostIp = MutableStateFlow("")
+    val hostIp: StateFlow<String> = _hostIp
 
     private val _syncStatus = MutableStateFlow(SyncStatus.DISCONNECTED)
     val syncStatus: StateFlow<SyncStatus> = _syncStatus
@@ -43,6 +48,7 @@ class HostViewModel : ViewModel() {
 
     fun setHostMode(server: HostServer, discovery: DiscoveryService) {
         _mode.value = Mode.HOST
+        _hostIp.value = getLocalIpAddress()
         hostServer = server
         discoveryService = discovery
         server.start()
@@ -101,6 +107,24 @@ class HostViewModel : ViewModel() {
     }
 
     fun getClient(): SyncClient? = syncClient
+
+    private fun getLocalIpAddress(): String {
+        try {
+            NetworkInterface.getNetworkInterfaces()?.toList()?.forEach { iface ->
+                if (!iface.isLoopback && iface.isUp) {
+                    iface.inetAddresses.toList()
+                        .filterIsInstance<Inet4Address>()
+                        .forEach { addr ->
+                            val ip = addr.hostAddress ?: ""
+                            if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) {
+                                return ip
+                            }
+                        }
+                }
+            }
+        } catch (_: Exception) {}
+        return "未知"
+    }
 
     override fun onCleared() {
         super.onCleared()

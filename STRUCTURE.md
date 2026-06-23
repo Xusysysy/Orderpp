@@ -54,7 +54,8 @@ app/src/main/java/com/opp/oder/
 │   ├── theme/
 │   │   ├── Color.kt              # 暗色主题色板 (琥珀主色)
 │   │   ├── Type.kt               # 字体排版
-│   │   └── Theme.kt              # Material3 暗色主题
+│   │   ├── Theme.kt              # Material3 暗色主题
+│   │   └── PreviewUtils.kt       # Compose 预览工具 (OderPreview 暗/亮主题包装器)
 │   ├── screen/
 │   │   ├── RoleSelectScreen.kt   # [已废弃] 角色选择页，现由设置页内模式按钮替代
 │   │   ├── HostSetupScreen.kt    # 局域网设置（Host/Client/发现列表）
@@ -72,6 +73,12 @@ app/src/main/java/com/opp/oder/
 │
 └── util/
     └── PinHelper.kt              # PIN 码校验工具 (默认 0000)
+
+scripts/
+└── adb_forward.ps1               # 模拟器端口转发脚本 (多模拟器联调, 支持 -Watch 监听模式)
+
+res/xml/
+└── network_security_config.xml   # 允许明文 HTTP 局域网通信
 ```
 
 ## 数据流
@@ -125,6 +132,7 @@ MainScreen 内部导航：
 | `gradle/libs.versions.toml` | Ktor 3.1.2, Kotlin 2.2.10, AGP 9.2.1 |
 | `local.properties` | `sdk.dir=C\:\\Users\\20119\\AppData\\Local\\Android\\Sdk` |
 | `oder.keystore` | 签名密钥 (alias=oder, password=oder123) |
+| `res/xml/network_security_config.xml` | 允许明文 HTTP 局域网通信 |
 
 ## 构建命令
 
@@ -133,3 +141,27 @@ $env:JAVA_HOME = "D:\AndroidDev\jbr"
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 ./gradlew assembleDebug
 ```
+
+## 模拟器端口转发
+
+多模拟器联调时 NSD 不可用，需 ADB 端口转发。**每次 installDebug 自动执行**，无需手动操作。
+
+```powershell
+# 手动运行（一次性配置）
+powershell -File scripts/adb_forward.ps1
+
+# 监听模式（自动检测新模拟器）
+powershell -File scripts/adb_forward.ps1 -Watch
+
+# 清理转发
+powershell -File scripts/adb_forward.ps1 -CleanOnly
+```
+
+Client 模拟器连接时输入 `10.0.2.2:8765`。
+
+## 真实设备局域网连接
+
+无需 ADB 转发。确保设备连接同一 WiFi：
+1. Host 设备启动主机模式 → 设置页显示本机 IP
+2. Client 设备手动输入 Host IP 和端口 8765 即可连接
+3. NSD 自动发现也会在局域网内搜索主机

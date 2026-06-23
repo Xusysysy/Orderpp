@@ -4,6 +4,7 @@ import android.net.nsd.NsdServiceInfo
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -55,6 +56,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -68,6 +71,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -137,13 +141,20 @@ fun MainScreen(
     val role by roleViewModel.role.collectAsStateWithLifecycle()
     val allOrders by orderViewModel.allOrders.collectAsStateWithLifecycle()
     val selectedBillId by orderViewModel.selectedBillId.collectAsStateWithLifecycle()
+    val activeOrderCount by orderViewModel.activeOrderCount.collectAsStateWithLifecycle()
+    val submittedOrders by orderViewModel.submittedOrders.collectAsStateWithLifecycle()
+    val expandedOrderId by orderViewModel.expandedOrderId.collectAsStateWithLifecycle()
+    val syncStatus by hostViewModel.syncStatus.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableStateOf(Tab.MENU) }
     var showTableDrawer by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showPinDialog by remember { mutableStateOf(false) }
+    var showHostPrompt by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
     val pinError by roleViewModel.pinError.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     var flyItem by remember { mutableStateOf<MenuItemEntity?>(null) }
     var flySourceX by remember { mutableIntStateOf(0) }
@@ -171,8 +182,9 @@ fun MainScreen(
     }
 
     LaunchedEffect(role, selectedTableId) {
-        if (!isStaff && selectedTableId == null) {
-            showTableDrawer = true
+        if (!isStaff && selectedTableId == null && tables.isNotEmpty()) {
+            tableViewModel.selectTable(tables.first().id)
+            orderViewModel.loadOrder(tables.first().id)
         } else if (isStaff) {
             showTableDrawer = false
         }
@@ -181,6 +193,15 @@ fun MainScreen(
     LaunchedEffect(selectedTab, isStaff) {
         if (isStaff && selectedTab == Tab.BILL) {
             orderViewModel.loadAllOrders()
+            orderViewModel.startAutoRefresh()
+        } else {
+            orderViewModel.stopAutoRefresh()
+        }
+    }
+
+    LaunchedEffect(syncStatus) {
+        if (syncStatus == HostViewModel.SyncStatus.SYNCED) {
+            snackbarHostState.showSnackbar("连接成功")
         }
     }
 
@@ -213,8 +234,8 @@ fun MainScreen(
                 roleViewModel = roleViewModel,
                 hostViewModel = hostViewModel,
                 discoveredHosts = discoveredHosts,
-                onStartHost = { onStartHost(); showSettings = false },
-                onConnectToHost = { ip -> onConnectToHost(ip); showSettings = false },
+                onStartHost = onStartHost,
+                onConnectToHost = onConnectToHost,
                 showPinDialog = showPinDialog,
                 pinInput = pinInput,
                 pinError = pinError,
@@ -233,6 +254,7 @@ fun MainScreen(
                         showPinDialog = false
                         pinInput = ""
                         showSettings = false
+                        showHostPrompt = true
                     }
                 },
                 onBack = { showSettings = false }
@@ -241,6 +263,7 @@ fun MainScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 modifier = modifier,
+                snackbarHost = { SnackbarHost(snackbarHostState) },
                 bottomBar = {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface,
@@ -267,9 +290,11 @@ fun MainScreen(
                                     billBtnY = pos.y.roundToInt()
                                 }) {
                                     BadgedBox(badge = {
-                                        if (totalItemCount > 0) {
+                                        val badgeCount = if (isStaff) activeOrderCount else totalItemCount
+                                        if (badgeCount > 0) {
                                             Badge(containerColor = MaterialTheme.colorScheme.error) {
-                                                Text("$totalItemCount", fontSize = 11.sp)
+                                                Text("$badgeCount", fontSize = 11.sp)
+
                                             }
                                         }
                                     }) {
@@ -341,19 +366,27 @@ fun MainScreen(
                             BillTabContent(
                                 currentOrder = currentOrder,
                                 totalPrice = totalPrice,
+                                submittedOrders = submittedOrders,
+                                expandedOrderId = expandedOrderId,
                                 onUpdateQuantity = { item, delta -> orderViewModel.updateQuantity(item, delta) },
+                                onToggleExpand = { orderViewModel.toggleExpand(it) },
+                                onResubmit = { orderViewModel.resubmitOrder(it, hostViewModel) },
+                                onAddToSubmitted = { orderId, itemId, name, price -> orderViewModel.addItemToSubmitted(orderId, itemId, name, price) },
+                                onUpdateSubmittedQty = { orderId, item, delta -> orderViewModel.updateSubmittedQty(orderId, item, delta) },
                                 onSubmitOrder = {
                                     val order = currentOrder ?: return@BillTabContent
                                     val items = order.items.map {
                                         com.opp.oder.network.ApiOrderItemRequest(it.menuItemId, it.name, it.quantity, it.price)
                                     }
                                     hostViewModel.submitOrder(order.order.tableId, items)
-                                    orderViewModel.settleOrder()
+                                    orderViewModel.submitCurrentOrder()
                                 }
                             )
                         }
                         Tab.MY -> MyTabContent(
                             role = role,
+                            hostMode = hostViewModel.mode.collectAsStateWithLifecycle().value,
+                            syncStatus = hostViewModel.syncStatus.collectAsStateWithLifecycle().value,
                             onOpenSettings = { showSettings = true }
                         )
                     }
@@ -434,6 +467,23 @@ fun MainScreen(
             onSaveRecipe = { steps, ingredients ->
                 val item = selectedMenuItem ?: return@RecipeSheet
                 menuViewModel.saveRecipe(item.id, steps, ingredients)
+            }
+        )
+    }
+
+    if (showHostPrompt) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showHostPrompt = false },
+            title = { Text("作为主机") },
+            text = { Text("是否在此设备上运行主机服务器？\n其他设备可连接并同步数据。") },
+            confirmButton = {
+                Button(onClick = {
+                    showHostPrompt = false
+                    onStartHost()
+                }) { Text("作为主机") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHostPrompt = false }) { Text("暂不") }
             }
         )
     }
@@ -542,6 +592,11 @@ private fun MenuTabContent(
 ) {
     val categories = menuItems.map { it.category }.distinct()
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "") }
+    LaunchedEffect(categories) {
+        if (selectedCategory.isEmpty() && categories.isNotEmpty()) {
+            selectedCategory = categories.first()
+        }
+    }
     var showEditDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<MenuItemEntity?>(null) }
     val allCategories = remember { mutableStateListOf<String>().also { it.addAll(categories) } }
@@ -642,7 +697,7 @@ private fun MenuTabContent(
                         }
                     } else {
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 140.dp),
+                            columns = GridCells.Adaptive(minSize = 180.dp),
                             contentPadding = PaddingValues(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -656,8 +711,11 @@ private fun MenuTabContent(
                                             if (isStaff) {
                                                 onItemClick(item)
                                             } else {
-                                                onAddToOrder(item)
-                                                onItemClick(item)
+                                                if (item.hasRecipe) {
+                                                    onItemClick(item)
+                                                } else {
+                                                    onAddToOrder(item)
+                                                }
                                             }
                                         },
                                     showAddButton = !isStaff,
@@ -789,41 +847,20 @@ private fun MenuItemEditDialog(
 private fun BillTabContent(
     currentOrder: com.opp.oder.data.db.dao.OrderWithItems?,
     totalPrice: Double,
+    submittedOrders: List<com.opp.oder.data.db.dao.OrderWithItems>,
+    expandedOrderId: Long?,
     onUpdateQuantity: (OrderItemEntity, Int) -> Unit,
+    onToggleExpand: (Long) -> Unit,
+    onResubmit: (com.opp.oder.data.db.dao.OrderWithItems) -> Unit,
+    onAddToSubmitted: (Long, Long, String, Double) -> Unit,
+    onUpdateSubmittedQty: (Long, OrderItemEntity, Int) -> Unit,
     onSubmitOrder: (() -> Unit)? = null
 ) {
     val order = currentOrder
-    if (order != null && order.items.isNotEmpty()) {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("当前订单", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                Text("合计: ¥%.0f".format(totalPrice), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            }
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(order.items) { item ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(item.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                            Text("¥%.0f x ${item.quantity}".format(item.price), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                        }
-                        QuantityStepper(quantity = item.quantity, onIncrement = { onUpdateQuantity(item, 1) }, onDecrement = { onUpdateQuantity(item, -1) })
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
-                }
-            }
-            if (onSubmitOrder != null) {
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = onSubmitOrder, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
-                    Text("提交订单")
-                }
-            }
-        }
-    } else {
+    val hasActiveOrder = order != null && order.items.isNotEmpty()
+    val hasSubmittedOrders = submittedOrders.isNotEmpty()
+
+    if (!hasActiveOrder && !hasSubmittedOrders) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("暂无订单", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
@@ -831,6 +868,110 @@ private fun BillTabContent(
                 Text("请先在菜单中选择桌位并添加商品", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f))
             }
         }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (hasActiveOrder) {
+            item(key = "active") {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("当前订单", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Text("合计: ¥%.0f".format(totalPrice), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        order!!.items.forEach { item ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(item.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                    Text("¥%.0f x ${item.quantity}".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                }
+                                QuantityStepper(quantity = item.quantity, onIncrement = { onUpdateQuantity(item, 1) }, onDecrement = { onUpdateQuantity(item, -1) })
+                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
+                        }
+                        if (onSubmitOrder != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Button(onClick = onSubmitOrder, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                                Text("提交订单")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (hasSubmittedOrders) {
+            item(key = "submitted_header") {
+                Text("已提交", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+            }
+            items(submittedOrders, key = { it.order.id }) { sub ->
+                val isExpanded = sub.order.id == expandedOrderId
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem()
+                        .clickable { onToggleExpand(sub.order.id) },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("${sub.items.size}件 · ¥%.0f".format(sub.items.sumOf { it.price * it.quantity }),
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                            Text(if (isExpanded) "收起 ▲" else "展开 ▼",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                        if (isExpanded) {
+                            Spacer(Modifier.height(8.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
+                            Spacer(Modifier.height(8.dp))
+                            sub.items.forEach { item ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                        Text("¥%.0f x ${item.quantity}".format(item.price), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    }
+                                    QuantityStepper(quantity = item.quantity,
+                                        onIncrement = { onUpdateSubmittedQty(sub.order.id, item, 1) },
+                                        onDecrement = { onUpdateSubmittedQty(sub.order.id, item, -1) })
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { onResubmit(sub) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("重新提交")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item { Spacer(Modifier.height(80.dp)) }
     }
 }
 
@@ -856,12 +997,13 @@ private fun StaffBillContent(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(allOrders) { bill ->
+                items(allOrders, key = { it.orderId }) { bill ->
                     val isSelected = bill.orderId == selectedBillId
                     val isSettled = bill.status == "SETTLED"
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateItem()
                             .then(
                                 if (isSettled) Modifier
                                 else Modifier.clickable { onSelectBill(bill.orderId) }
@@ -961,11 +1103,31 @@ private fun StaffBillContent(
 @Composable
 private fun MyTabContent(
     role: RoleViewModel.Role,
+    hostMode: HostViewModel.Mode,
+    syncStatus: HostViewModel.SyncStatus,
     onOpenSettings: () -> Unit
 ) {
+    val statusColor = when {
+        hostMode == HostViewModel.Mode.HOST -> MaterialTheme.colorScheme.primary
+        syncStatus == HostViewModel.SyncStatus.SYNCED -> MaterialTheme.colorScheme.secondary
+        syncStatus == HostViewModel.SyncStatus.CONNECTING -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.error
+    }
+    val statusText = when {
+        hostMode == HostViewModel.Mode.HOST -> "● 主机运行中"
+        syncStatus == HostViewModel.SyncStatus.SYNCED -> "● 已连接"
+        syncStatus == HostViewModel.SyncStatus.CONNECTING -> "◌ 连接中"
+        else -> "● 未连接"
+    }
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("我的", color = MaterialTheme.colorScheme.onBackground) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("我的", color = MaterialTheme.colorScheme.onBackground)
+                    Spacer(Modifier.width(12.dp))
+                    Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
+                }
+            },
             actions = {
                 IconButton(onClick = onOpenSettings) {
                     Text("⚙", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
@@ -1030,10 +1192,13 @@ private fun SettingsPage(
     val syncStatus by hostViewModel.syncStatus.collectAsStateWithLifecycle()
     val connectedHostId by hostViewModel.connectedHostId.collectAsStateWithLifecycle()
     val connectedHostIp by hostViewModel.connectedHostIp.collectAsStateWithLifecycle()
+    val hostIp by hostViewModel.hostIp.collectAsStateWithLifecycle()
 
     var showChangePin by remember { mutableStateOf(false) }
     var oldPin by remember { mutableStateOf("") }
     var newPin by remember { mutableStateOf("") }
+    var manualIpInput by remember { mutableStateOf("") }
+    var manualPortInput by remember { mutableStateOf("8765") }
 
     Scaffold(
         topBar = {
@@ -1099,17 +1264,84 @@ private fun SettingsPage(
                     else -> "○ 未连接"
                 }
                 Text(modeText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                Spacer(Modifier.height(4.dp))
+                if (hostMode == HostViewModel.Mode.HOST && hostIp.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text("本机IP: $hostIp : 8765", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(Modifier.height(8.dp))
                 Button(onClick = onStartHost, modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                     Text(if (hostMode == HostViewModel.Mode.HOST) "主机运行中（点击重启）" else "作为主机")
                 }
                 if (hostMode == HostViewModel.Mode.HOST) {
                     Text("心跳: ● 每5秒广播一次", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.padding(top = 4.dp))
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedButton(onClick = onStartHost, modifier = Modifier.fillMaxWidth()) {
+                        Text("重新广播", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                if (hostMode != HostViewModel.Mode.HOST) {
+                Spacer(Modifier.height(8.dp))
+
+                val st = when (syncStatus) {
+                    HostViewModel.SyncStatus.DISCONNECTED -> "○ 未连接"
+                    HostViewModel.SyncStatus.CONNECTING -> "◌ 连接中..."
+                    HostViewModel.SyncStatus.SYNCED -> "● 已同步"
+                    HostViewModel.SyncStatus.ERROR -> "✕ 连接失败"
+                }
+                Text(st, style = MaterialTheme.typography.bodySmall, color = when (syncStatus) {
+                    HostViewModel.SyncStatus.ERROR -> MaterialTheme.colorScheme.error
+                    HostViewModel.SyncStatus.SYNCED -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                })
+                if (syncStatus == HostViewModel.SyncStatus.ERROR) {
+                    Text("提示: 模拟器联调请先运行 scripts/adb_forward.ps1", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
+                }
+                if (connectedHostId.isNotEmpty()) {
+                    Text("主机: $connectedHostId ($connectedHostIp)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Text("手动连接", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = manualIpInput,
+                        onValueChange = { manualIpInput = it },
+                        label = { Text("主机IP") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = manualPortInput,
+                        onValueChange = { manualPortInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("端口") },
+                        singleLine = true,
+                        modifier = Modifier.width(80.dp)
+                    )
                 }
                 Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        val ip = manualIpInput.trim()
+                        if (ip.isNotBlank()) {
+                            val port = manualPortInput.ifBlank { "8765" }
+                            onConnectToHost("$ip:$port")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Text("连接", color = MaterialTheme.colorScheme.primary)
+                }
 
                 if (discoveredHosts.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
                     Text("发现的主机:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     discoveredHosts.forEach { host ->
                         val ip = host.host?.hostAddress ?: ""
@@ -1117,6 +1349,7 @@ private fun SettingsPage(
                             modifier = Modifier.clickable { onConnectToHost(ip) }.padding(vertical = 4.dp),
                             color = MaterialTheme.colorScheme.primary)
                     }
+                }
                 }
             } else {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
@@ -1128,13 +1361,67 @@ private fun SettingsPage(
                     HostViewModel.SyncStatus.SYNCED -> "● 已同步"
                     HostViewModel.SyncStatus.ERROR -> "✕ 连接失败"
                 }
-                Text(st, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text(st, style = MaterialTheme.typography.bodySmall, color = when (syncStatus) {
+                    HostViewModel.SyncStatus.ERROR -> MaterialTheme.colorScheme.error
+                    HostViewModel.SyncStatus.SYNCED -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                })
+                if (syncStatus == HostViewModel.SyncStatus.ERROR) {
+                    Text("提示: 模拟器联调请先运行 scripts/adb_forward.ps1", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error.copy(alpha = 0.6f))
+                }
                 if (connectedHostId.isNotEmpty()) {
                     Text("主机: $connectedHostId ($connectedHostIp)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                 }
-            }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                Spacer(Modifier.height(8.dp))
+                Text("手动连接", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = manualIpInput,
+                        onValueChange = { manualIpInput = it },
+                        label = { Text("主机IP") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = manualPortInput,
+                        onValueChange = { manualPortInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("端口") },
+                        singleLine = true,
+                        modifier = Modifier.width(80.dp)
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        val ip = manualIpInput.trim()
+                        if (ip.isNotBlank()) {
+                            val port = manualPortInput.ifBlank { "8765" }
+                            onConnectToHost("$ip:$port")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Text("连接", color = MaterialTheme.colorScheme.primary)
+                }
+
+                if (discoveredHosts.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("发现的主机:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    discoveredHosts.forEach { host ->
+                        val ip = host.host?.hostAddress ?: ""
+                        Text("${host.serviceName} ($ip)",
+                            modifier = Modifier.clickable { onConnectToHost(ip) }.padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
             Text("模式切换", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(Modifier.height(8.dp))
 

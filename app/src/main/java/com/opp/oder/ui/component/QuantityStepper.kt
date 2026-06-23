@@ -14,7 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.opp.oder.ui.theme.OderPreview
+import com.opp.oder.ui.theme.OderPreviewLight
 
 @Composable
 fun QuantityStepper(
@@ -30,7 +35,7 @@ fun QuantityStepper(
     ) {
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(36.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                 .clickable { onDecrement() },
@@ -49,7 +54,7 @@ fun QuantityStepper(
         )
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(36.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary)
                 .clickable { onIncrement() },
@@ -61,6 +66,26 @@ fun QuantityStepper(
                 color = MaterialTheme.colorScheme.onPrimary,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun QuantityStepperPreview() {
+    OderPreview {
+        Column(Modifier.padding(16.dp)) {
+            QuantityStepper(quantity = 3, onIncrement = {}, onDecrement = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "QuantityStepper Light")
+@Composable
+private fun QuantityStepperPreviewLight() {
+    OderPreviewLight {
+        Column(Modifier.padding(16.dp)) {
+            QuantityStepper(quantity = 5, onIncrement = {}, onDecrement = {})
         }
     }
 }

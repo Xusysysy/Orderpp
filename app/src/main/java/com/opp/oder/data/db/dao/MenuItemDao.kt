@@ -84,4 +84,9 @@ class MenuItemDao(private val helper: DatabaseHelper) {
             db.insertWithOnConflict("menu_items", null, cv, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
         }
     }
+
+    suspend fun markHasRecipe(id: Long, hasRecipe: Boolean) = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply { put("hasRecipe", if (hasRecipe) 1 else 0) }
+        helper.writableDatabase.update("menu_items", cv, "id = ?", arrayOf(id.toString()))
+    }
 }

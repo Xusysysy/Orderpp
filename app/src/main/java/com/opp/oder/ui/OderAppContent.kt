@@ -145,6 +145,13 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
             val apiMenu = client.getMenu()
             menuRepository.updateAllFromApi(apiMenu)
             menuViewModel.loadMenuItems()
+            apiMenu.filter { it.hasRecipe }.forEach { item ->
+                try {
+                    val steps = client.getRecipeSteps(item.id)
+                    val ingredients = client.getRecipeIngredients(item.id)
+                    menuRepository.syncRecipesFromApi(item.id, steps, ingredients)
+                } catch (_: Exception) {}
+            }
         }
         hostViewModel.onSyncPin = { pin ->
             com.opp.oder.util.PinHelper.setPin(pin)
@@ -152,14 +159,25 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
 
         LaunchedEffect(role) {
             prefs.edit().putString("app_role", role.name).apply()
-        }
-
-        LaunchedEffect(role) {
-            prefs.edit().putString("app_role", role.name).apply()
+            if (role == RoleViewModel.Role.GUEST && discoveredHosts.isNotEmpty()) {
+                val knownHost = prefs.getString("known_host", null)
+                val known = discoveredHosts.find { it.serviceName == knownHost }
+                if (known != null) {
+                    val ip = known.host?.hostAddress ?: return@LaunchedEffect
+                    val client = SyncClient(ip)
+                    hostViewModel.connectAndSync(ip, known.serviceName, client, discoveryService)
+                } else if (!hasAutoPrompted) {
+                    hasAutoPrompted = true
+                    promptedHostInfo = discoveredHosts.first()
+                    showConnectPrompt = true
+                }
+            } else {
+                hasAutoPrompted = false
+                showConnectPrompt = false
+            }
         }
 
         LaunchedEffect(Unit) {
-            discoveryService.startDiscovery()
             discoveryService.onHostDiscovered = { info ->
                 if (discoveredHosts.none { it.serviceName == info.serviceName }) discoveredHosts.add(info)
                 val currentRole = roleViewModel.role.value
@@ -181,6 +199,11 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                     hostViewModel.retryPendingOrders()
                 }
             }
+            discoveryService.startDiscovery()
+            while (true) {
+                kotlinx.coroutines.delay(10_000)
+                discoveryService.restartDiscovery()
+            }
         }
 
         MainScreen(
@@ -196,31 +219,89 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                 hostViewModel.setHostMode(HostServer(helper), discoveryService)
             },
             onConnectToHost = { ip ->
-                hostViewModel.setClientMode(ip, SyncClient(ip), discoveryService)
+                val cleanIp = ip.substringBefore(":")
+                val client = SyncClient(cleanIp)
+                prefs.edit().putString("known_host", cleanIp).apply()
+                hostViewModel.connectAndSync(cleanIp, cleanIp, client, discoveryService)
             }
         )
 
-        if (showConnectPrompt && promptedHostInfo != null) {
-            val info = promptedHostInfo!!
-            val ip = info.host?.hostAddress ?: ""
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showConnectPrompt = false },
-                title = { androidx.compose.material3.Text("发现主机") },
-                text = { androidx.compose.material3.Text("${info.serviceName} ($ip)\n是否连接并同步数据？") },
-                confirmButton = {
-                    androidx.compose.material3.Button(onClick = {
-                        showConnectPrompt = false
-                        prefs.edit().putString("known_host", info.serviceName).apply()
-                        val client = SyncClient(ip)
-                        hostViewModel.connectAndSync(ip, info.serviceName, client, discoveryService)
-                    }) { androidx.compose.material3.Text("连接") }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { showConnectPrompt = false }) {
-                        androidx.compose.material3.Text("忽略")
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(6000)
+            if (discoveredHosts.isEmpty() && !hasAutoPrompted) {
+                hasAutoPrompted = true
+                promptedHostInfo = null
+                showConnectPrompt = true
+            }
+        }
+
+        if (showConnectPrompt) {
+            if (promptedHostInfo != null) {
+                val info = promptedHostInfo!!
+                val ip = info.host?.hostAddress ?: ""
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showConnectPrompt = false },
+                    title = { androidx.compose.material3.Text("有主机在线") },
+                    text = { androidx.compose.material3.Text("发现 ${info.serviceName} ($ip)\n是否连接？") },
+                    confirmButton = {
+                        androidx.compose.material3.Button(onClick = {
+                            showConnectPrompt = false
+                            prefs.edit().putString("known_host", info.serviceName).apply()
+                            val client = SyncClient(ip)
+                            hostViewModel.connectAndSync(ip, info.serviceName, client, discoveryService)
+                        }) { androidx.compose.material3.Text("连接") }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { showConnectPrompt = false }) {
+                            androidx.compose.material3.Text("忽略")
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                var manualIpInput by remember { mutableStateOf("") }
+                var manualPortInput by remember { mutableStateOf("8765") }
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showConnectPrompt = false },
+                    title = { androidx.compose.material3.Text("未发现主机") },
+                    text = {
+                        androidx.compose.foundation.layout.Column {
+                            androidx.compose.material3.Text("局域网内未搜索到主机。")
+                            androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
+                            androidx.compose.material3.OutlinedTextField(
+                                value = manualIpInput,
+                                onValueChange = { manualIpInput = it },
+                                label = { androidx.compose.material3.Text("主机IP") },
+                                singleLine = true,
+                                modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                            )
+                            androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.height(4.dp))
+                            androidx.compose.material3.OutlinedTextField(
+                                value = manualPortInput,
+                                onValueChange = { manualPortInput = it.filter { c -> c.isDigit() } },
+                                label = { androidx.compose.material3.Text("端口") },
+                                singleLine = true
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.Button(onClick = {
+                            val ip = manualIpInput.trim()
+                            if (ip.isNotBlank()) {
+                                showConnectPrompt = false
+                                prefs.edit().putString("known_host", ip).apply()
+                                val client = SyncClient(ip)
+                                hostViewModel.connectAndSync(ip, ip, client, discoveryService)
+                            }
+                        }) { androidx.compose.material3.Text("手动连接") }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = {
+                            showConnectPrompt = false
+                            hasAutoPrompted = false
+                        }) { androidx.compose.material3.Text("继续搜索") }
+                    }
+                )
+            }
         }
     }
 }

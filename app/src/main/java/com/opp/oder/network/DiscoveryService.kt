@@ -40,11 +40,10 @@ class DiscoveryService(private val context: Context) {
     }
 
     fun startDiscovery() {
-        discoveredHosts.clear()
         discoveryListener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) {}
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                if (serviceInfo.serviceType == SERVICE_TYPE) {
+                if (serviceInfo.serviceType.contains(SERVICE_TYPE)) {
                     nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                         override fun onServiceResolved(resolvedInfo: NsdServiceInfo) {
                             discoveredHosts.add(resolvedInfo)
@@ -59,10 +58,17 @@ class DiscoveryService(private val context: Context) {
                 onHostLost?.invoke(serviceInfo)
             }
             override fun onDiscoveryStopped(serviceType: String) {}
-            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {}
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                android.util.Log.e("OderNSD", "Discovery failed: $errorCode")
+            }
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
         }
         nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+    }
+
+    fun restartDiscovery() {
+        stopDiscovery()
+        startDiscovery()
     }
 
     fun stopDiscovery() {

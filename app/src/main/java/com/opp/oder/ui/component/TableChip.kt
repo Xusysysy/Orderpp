@@ -18,7 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import com.opp.oder.data.db.entity.TableEntity
+import com.opp.oder.ui.theme.OderPreview
+import com.opp.oder.ui.theme.OderPreviewLight
 
 @Composable
 fun TableChip(
@@ -59,6 +62,44 @@ fun TableChip(
                     .size(8.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun TableChipPreview() {
+    OderPreview {
+        Column(Modifier.padding(16.dp)) {
+            TableChip(
+                table = TableEntity(id = 1, name = "A1桌", status = TableEntity.STATUS_ORDERED),
+                isSelected = true,
+                onClick = {}
+            )
+            TableChip(
+                table = TableEntity(id = 2, name = "B3桌", status = TableEntity.STATUS_IDLE),
+                isSelected = false,
+                onClick = {}
+            )
+            TableChip(
+                table = TableEntity(id = 3, name = "包间VIP", status = TableEntity.STATUS_ORDERED),
+                isSelected = false,
+                onClick = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "TableChip Light")
+@Composable
+private fun TableChipPreviewLight() {
+    OderPreviewLight {
+        Column(Modifier.padding(16.dp)) {
+            TableChip(
+                table = TableEntity(id = 1, name = "A1桌", status = TableEntity.STATUS_ORDERED),
+                isSelected = true,
+                onClick = {}
             )
         }
     }

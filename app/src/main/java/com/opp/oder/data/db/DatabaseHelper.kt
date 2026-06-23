@@ -17,6 +17,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(
                 sort_order INTEGER DEFAULT 0
             )
         """)
+        db.execSQL("INSERT INTO tables (name, zone) VALUES ('大厅1', '大厅')")
+        db.execSQL("INSERT INTO tables (name, zone) VALUES ('包间1', '包间')")
         db.execSQL("""
             CREATE TABLE menu_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

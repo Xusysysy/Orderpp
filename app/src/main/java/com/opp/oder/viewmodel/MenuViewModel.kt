@@ -93,6 +93,11 @@ class MenuViewModel(
     ) {
         viewModelScope.launch {
             repository.saveRecipe(menuItemId, steps, ingredients)
+            repository.markHasRecipe(menuItemId, steps.isNotEmpty())
+            _recipeSteps.value = steps
+            _recipeIngredients.value = ingredients
+            _sheetVisible.value = false
+            repository.getAll().collect { _menuItems.value = it }
         }
     }
 }

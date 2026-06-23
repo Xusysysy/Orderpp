@@ -44,4 +44,21 @@ class MenuRepository(
         steps.forEach { recipeDao.insertStep(it) }
         ingredients.forEach { recipeDao.insertIngredient(it) }
     }
+
+    suspend fun markHasRecipe(menuItemId: Long, hasRecipe: Boolean) = menuDao.markHasRecipe(menuItemId, hasRecipe)
+
+    suspend fun syncRecipesFromApi(
+        menuItemId: Long,
+        steps: List<com.opp.oder.network.ApiRecipeStep>,
+        ingredients: List<com.opp.oder.network.ApiRecipeIngredient>
+    ) {
+        recipeDao.deleteSteps(menuItemId)
+        recipeDao.deleteIngredients(menuItemId)
+        steps.forEach { s ->
+            recipeDao.insertStep(RecipeStepEntity(menuItemId = menuItemId, stepNumber = s.stepNumber, description = s.description))
+        }
+        ingredients.forEach { ing ->
+            recipeDao.insertIngredient(RecipeIngredientEntity(menuItemId = menuItemId, name = ing.name, amount = ing.amount, unit = ing.unit))
+        }
+    }
 }
