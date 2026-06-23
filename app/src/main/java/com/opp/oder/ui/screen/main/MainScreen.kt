@@ -785,8 +785,12 @@ private fun TabletMenuPanel(
         }
 
         if (!isStaff && selectedTableId == null) {
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text("请先选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp).clickable { showTableDrawer = !showTableDrawer }, contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("点击选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(4.dp))
+                    Text("请先选择桌位", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                }
             }
         } else {
             if (showTableDrawer) {
@@ -1186,8 +1190,12 @@ private fun MenuTabContent(
         }
 
         if (!isStaff && selectedTableId == null) {
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text("请先选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp).clickable { onShowTableDrawer() }, contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("点击选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(4.dp))
+                    Text("请先选择桌位", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                }
             }
         } else {
             Column(modifier = Modifier.fillMaxSize()) {

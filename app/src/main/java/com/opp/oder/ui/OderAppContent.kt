@@ -284,26 +284,26 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                         }
                     },
                     confirmButton = {
-                        androidx.compose.material3.Button(onClick = {
-                            val ip = manualIpInput.trim()
-                            if (ip.isNotBlank()) {
-                                showConnectPrompt = false
-                                prefs.edit().putString("known_host", ip).apply()
-                                val client = SyncClient(ip)
-                                hostViewModel.connectAndSync(ip, ip, client, discoveryService)
-                            }
-                        }) { androidx.compose.material3.Text("手动连接") }
-                    },
-                    dismissButton = {
-                        androidx.compose.foundation.layout.Row {
+                        androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
                             androidx.compose.material3.TextButton(onClick = {
                                 showConnectPrompt = false
                                 hasAutoPrompted = false
                             }) { androidx.compose.material3.Text("继续搜索") }
                             androidx.compose.material3.Button(onClick = {
-                                showConnectPrompt = false
-                                hostViewModel.setHostMode(HostServer(helper), discoveryService)
-                            }) { androidx.compose.material3.Text("作为主机") }
+                                val ip = manualIpInput.trim()
+                                if (ip.isNotBlank()) {
+                                    showConnectPrompt = false
+                                    prefs.edit().putString("known_host", ip).apply()
+                                    val client = SyncClient(ip)
+                                    hostViewModel.connectAndSync(ip, ip, client, discoveryService)
+                                }
+                            }) { androidx.compose.material3.Text("手动连接") }
+                            if (role == RoleViewModel.Role.STAFF) {
+                                androidx.compose.material3.Button(onClick = {
+                                    showConnectPrompt = false
+                                    hostViewModel.setHostMode(HostServer(helper), discoveryService)
+                                }) { androidx.compose.material3.Text("作为主机") }
+                            }
                         }
                     }
                 )
