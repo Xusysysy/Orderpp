@@ -164,8 +164,12 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                 val known = discoveredHosts.find { it.serviceName == knownHost }
                 if (known != null) {
                     val ip = known.host?.hostAddress ?: return@LaunchedEffect
-                    val client = SyncClient(ip)
-                    hostViewModel.connectAndSync(ip, known.serviceName, client, discoveryService)
+                    val alreadyConnected = hostViewModel.mode.value == HostViewModel.Mode.CLIENT &&
+                            hostViewModel.connectedHostIp.value == ip
+                    if (!alreadyConnected) {
+                        val client = SyncClient(ip)
+                        hostViewModel.connectAndSync(ip, known.serviceName, client, discoveryService)
+                    }
                 } else if (!hasAutoPrompted) {
                     hasAutoPrompted = true
                     promptedHostInfo = discoveredHosts.first()
@@ -186,13 +190,17 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                     if (ip != null) {
                         val name = info.serviceName
                         val knownHost = prefs.getString("known_host", null)
-                        if (knownHost == name) {
-                            val client = com.opp.oder.network.SyncClient(ip)
-                            hostViewModel.connectAndSync(ip, name, client, discoveryService)
-                        } else if (!hasAutoPrompted) {
-                            hasAutoPrompted = true
-                            promptedHostInfo = info
-                            showConnectPrompt = true
+                        val alreadyConnected = hostViewModel.mode.value == HostViewModel.Mode.CLIENT &&
+                                hostViewModel.connectedHostIp.value == ip
+                        if (!alreadyConnected) {
+                            if (knownHost == name) {
+                                val client = com.opp.oder.network.SyncClient(ip)
+                                hostViewModel.connectAndSync(ip, name, client, discoveryService)
+                            } else if (!hasAutoPrompted) {
+                                hasAutoPrompted = true
+                                promptedHostInfo = info
+                                showConnectPrompt = true
+                            }
                         }
                     }
                 } else {
@@ -289,7 +297,7 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                             androidx.compose.material3.TextButton(onClick = {
                                 showConnectPrompt = false
                                 hasAutoPrompted = false
-                            }) { androidx.compose.material3.Text("继续搜索", maxLines = 1) }
+                            }) { androidx.compose.material3.Text("忽略", maxLines = 1) }
                             androidx.compose.material3.Button(onClick = {
                                 val ip = manualIpInput.trim()
                                 if (ip.isNotBlank()) {
@@ -298,7 +306,7 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                                     val client = SyncClient(ip)
                                     hostViewModel.connectAndSync(ip, ip, client, discoveryService)
                                 }
-                            }) { androidx.compose.material3.Text("手动连接", maxLines = 1) }
+                            }) { androidx.compose.material3.Text("连接", maxLines = 1) }
                             if (role == RoleViewModel.Role.STAFF) {
                                 androidx.compose.material3.Button(onClick = {
                                     showConnectPrompt = false
