@@ -980,6 +980,7 @@ private fun TabletMenuPanel(
                     modifier = Modifier.weight(1f)
                 ) {
                     gridItems(filteredItems) { item ->
+                        val qty = orderQuantities[item.id] ?: 0
                         Box {
                             MenuCard(
                                 item = item,
@@ -992,13 +993,21 @@ private fun TabletMenuPanel(
                                     }
                                 },
                                 showAddButton = !isStaff,
-                                orderQuantity = orderQuantities[item.id] ?: 0,
+                                orderQuantity = qty,
                                 onAddClick = { _, _ ->
                                     selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
                                 },
                                 onIncrement = { orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, 1) } },
                                 onDecrement = { orderItemMap[item.id]?.let { orderViewModel.updateQuantity(it, -1) } }
                             )
+                            if (qty > 0) {
+                                Badge(
+                                    modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp),
+                                    containerColor = MaterialTheme.colorScheme.error
+                                ) {
+                                    Text("$qty")
+                                }
+                            }
                             if (isStaff) {
                                 TextButton(
                                     onClick = { editingItem = item; showEditDialog = true },
