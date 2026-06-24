@@ -223,7 +223,8 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                 val client = SyncClient(cleanIp)
                 prefs.edit().putString("known_host", cleanIp).apply()
                 hostViewModel.connectAndSync(cleanIp, cleanIp, client, discoveryService)
-            }
+            },
+            prefs = prefs
         )
 
         LaunchedEffect(Unit) {

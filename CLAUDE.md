@@ -83,7 +83,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - If the user explicitly says to skip or do something else first, follow that instead.
 - Never force push. If push fails (e.g., no remote, no permission), report the error and continue.
 
-## 7. Prefer Edit Over Write + Sync STRUCTURE.md
+## 7. Build Environment
+
+**Windows only — no WSL.** Use `.\gradlew.bat` from project root. Set JAVA_HOME before every build (PowerShell sets it per-process):
+
+```powershell
+$env:JAVA_HOME = "D:\software\AndroidStudio\jbr"; .\gradlew.bat assembleDebug
+```
+
+**JDK path**: `D:\software\AndroidStudio\jbr` (JetBrains Runtime bundled with Android Studio).  
+**IDE**: Android Studio.  
+**First build** of a session takes ~1 minute (Dex, etc.) due to cold Gradle daemon. Set `timeout_ms = 300000` (5 min) to avoid abort. Subsequent builds reuse configuration cache and finish faster.  
+**Release build** only when user explicitly requests `assembleRelease`.
+
+## 8. Prefer Edit Over Write + Sync STRUCTURE.md
 
 **Prefer modifying files with the Edit tool rather than rewriting entire files. Only use Write when creating new files or when the scope of changes exceeds 50% of the file.**
 

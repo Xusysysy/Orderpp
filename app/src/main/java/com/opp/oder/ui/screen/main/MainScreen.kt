@@ -1,5 +1,6 @@
 package com.opp.oder.ui.screen.main
 
+import android.content.SharedPreferences
 import android.net.nsd.NsdServiceInfo
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -49,6 +50,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -133,6 +136,7 @@ fun MainScreen(
     discoveredHosts: List<NsdServiceInfo>,
     onStartHost: () -> Unit,
     onConnectToHost: (String) -> Unit,
+    prefs: SharedPreferences,
     modifier: Modifier = Modifier
 ) {
     val tables by tableViewModel.tables.collectAsStateWithLifecycle()
@@ -224,7 +228,8 @@ fun MainScreen(
             discoveredHosts = discoveredHosts,
             onToggleTheme = onToggleTheme,
             onStartHost = onStartHost,
-            onConnectToHost = onConnectToHost
+            onConnectToHost = onConnectToHost,
+            prefs = prefs
         )
         return
     }
@@ -239,13 +244,23 @@ fun MainScreen(
         flyItem = null
     }
 
-    LaunchedEffect(role, selectedTableId) {
+    LaunchedEffect(role, tables) {
         if (!isStaff && selectedTableId == null && tables.isNotEmpty()) {
-            tableViewModel.selectTable(tables.first().id)
-            orderViewModel.loadOrder(tables.first().id)
+            val savedTableId = prefs.getLong("selected_table_id", -1L)
+            val tableToSelect = if (savedTableId > 0 && tables.any { it.id == savedTableId }) {
+                savedTableId
+            } else {
+                tables.first().id
+            }
+            tableViewModel.selectTable(tableToSelect)
+            orderViewModel.loadOrder(tableToSelect)
         } else if (isStaff) {
             showTableDrawer = false
         }
+    }
+
+    LaunchedEffect(selectedTableId) {
+        selectedTableId?.let { prefs.edit().putLong("selected_table_id", it).apply() }
     }
 
     LaunchedEffect(selectedTab, isStaff) {
@@ -586,7 +601,8 @@ private fun TabletMainContent(
     discoveredHosts: List<NsdServiceInfo>,
     onToggleTheme: () -> Unit,
     onStartHost: () -> Unit,
-    onConnectToHost: (String) -> Unit
+    onConnectToHost: (String) -> Unit,
+    prefs: SharedPreferences
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     var showSettings by remember { mutableStateOf(false) }
@@ -743,7 +759,7 @@ private fun TabletMenuPanel(
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "") }
     var showEditDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<MenuItemEntity?>(null) }
-    var showTableDrawer by remember { mutableStateOf(false) }
+    var showTableMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(categories) {
         if (selectedCategory.isEmpty() && categories.isNotEmpty()) {
@@ -757,11 +773,49 @@ private fun TabletMenuPanel(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("桌位", modifier = Modifier.clickable { showTableDrawer = !showTableDrawer }
-                    .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary)
+                Box {
+                    Text("桌位", modifier = Modifier.clickable { showTableMenu = true }
+                        .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary)
+                    DropdownMenu(
+                        expanded = showTableMenu,
+                        onDismissRequest = { showTableMenu = false }
+                    ) {
+                        zones.forEach { zone ->
+                            val zoneTables = tables.filter { it.zone == zone }
+                            if (zone.isEmpty() || zoneTables.isEmpty()) return@forEach
+                            Text(
+                                zone,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            )
+                            zoneTables.forEach { table ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier.size(8.dp).background(
+                                                    if (table.status == "ORDERED") MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                                    shape = CircleShape
+                                                )
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(table.name)
+                                        }
+                                    },
+                                    onClick = { showTableMenu = false },
+                                    leadingIcon = if (table.id == selectedTableId) {
+                                        { Text("✓", color = MaterialTheme.colorScheme.primary) }
+                                    } else null
+                                )
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { editingItem = null; showEditDialog = true }) {
                     Text("+ 添加菜品", color = MaterialTheme.colorScheme.secondary)
@@ -769,48 +823,72 @@ private fun TabletMenuPanel(
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
         } else {
-            val tableLabel = if (selectedTableId != null) tables.find { it.id == selectedTableId }?.name ?: "" else "选择桌位"
+            val tableLabel = if (selectedTableId != null) tables.find { it.id == selectedTableId }?.name ?: "" else "选择桌位 ▾"
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(tableLabel, modifier = Modifier.clickable { showTableDrawer = !showTableDrawer }
-                    .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary)
+                Box {
+                    Text(tableLabel, modifier = Modifier.clickable { showTableMenu = true }
+                        .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small)
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary)
+                    DropdownMenu(
+                        expanded = showTableMenu,
+                        onDismissRequest = { showTableMenu = false }
+                    ) {
+                        zones.forEach { zone ->
+                            val zoneTables = tables.filter { it.zone == zone }
+                            if (zone.isEmpty() || zoneTables.isEmpty()) return@forEach
+                            Text(
+                                zone,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            )
+                            zoneTables.forEach { table ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier.size(8.dp).background(
+                                                    if (table.status == "ORDERED") MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                                    shape = CircleShape
+                                                )
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(table.name)
+                                        }
+                                    },
+                                    onClick = {
+                                        tableViewModel.selectTable(table.id)
+                                        orderViewModel.loadOrder(table.id)
+                                        showTableMenu = false
+                                    },
+                                    leadingIcon = if (table.id == selectedTableId) {
+                                        { Text("✓", color = MaterialTheme.colorScheme.primary) }
+                                    } else null
+                                )
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.weight(1f))
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
         }
 
         if (!isStaff && selectedTableId == null) {
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp).clickable { showTableDrawer = !showTableDrawer }, contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("点击选择桌位", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                    Text("请选择桌位后点餐", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(4.dp))
-                    Text("请先选择桌位", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                    Text("点击上方「选择桌位 ▾」按钮选择桌位", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
                 }
             }
         } else {
-            if (showTableDrawer) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    zones.forEach { zone ->
-                        if (zone.isNotEmpty()) {
-                            item { Text(zone, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 4.dp)) }
-                        }
-                        items(tables.filter { it.zone == zone }) { table ->
-                            FilterChip(selected = table.id == selectedTableId, onClick = {
-                                if (!isStaff) { tableViewModel.selectTable(table.id); orderViewModel.loadOrder(table.id) }
-                                showTableDrawer = false
-                            }, label = { Text(table.name) })
-                        }
-                    }
-                }
-            }
             LazyRow(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -845,7 +923,7 @@ private fun TabletMenuPanel(
                                         else selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
                                     }
                                 },
-                                showAddButton = !isStaff,
+                                showAddButton = false,
                                 orderQuantity = orderQuantities[item.id] ?: 0,
                                 onAddClick = { _, _ ->
                                     selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
