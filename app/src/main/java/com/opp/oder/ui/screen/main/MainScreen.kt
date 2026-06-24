@@ -190,6 +190,25 @@ fun MainScreen(
     val orderItemMap = orderItems.associateBy { it.menuItemId }
     val totalItemCount = orderItems.sumOf { it.quantity }
 
+    LaunchedEffect(role, tables) {
+        if (!isStaff && selectedTableId == null && tables.isNotEmpty()) {
+            val savedTableId = prefs.getLong("selected_table_id", -1L)
+            val tableToSelect = if (savedTableId > 0 && tables.any { it.id == savedTableId }) {
+                savedTableId
+            } else {
+                tables.first().id
+            }
+            tableViewModel.selectTable(tableToSelect)
+            orderViewModel.loadOrder(tableToSelect)
+        } else if (isStaff) {
+            showTableDrawer = false
+        }
+    }
+
+    LaunchedEffect(selectedTableId) {
+        selectedTableId?.let { prefs.edit().putLong("selected_table_id", it).apply() }
+    }
+
     if (isTablet) {
         TabletMainContent(
             tables = tables,
@@ -242,25 +261,6 @@ fun MainScreen(
         launch { flyAnimX.animateTo(billBtnX.toFloat() + 12f, animationSpec = tween(220)) }
         flyAnimY.animateTo(billBtnY.toFloat() + 12f, animationSpec = tween(220))
         flyItem = null
-    }
-
-    LaunchedEffect(role, tables) {
-        if (!isStaff && selectedTableId == null && tables.isNotEmpty()) {
-            val savedTableId = prefs.getLong("selected_table_id", -1L)
-            val tableToSelect = if (savedTableId > 0 && tables.any { it.id == savedTableId }) {
-                savedTableId
-            } else {
-                tables.first().id
-            }
-            tableViewModel.selectTable(tableToSelect)
-            orderViewModel.loadOrder(tableToSelect)
-        } else if (isStaff) {
-            showTableDrawer = false
-        }
-    }
-
-    LaunchedEffect(selectedTableId) {
-        selectedTableId?.let { prefs.edit().putLong("selected_table_id", it).apply() }
     }
 
     LaunchedEffect(selectedTab, isStaff) {

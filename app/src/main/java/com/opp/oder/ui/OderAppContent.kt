@@ -289,7 +289,7 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                             androidx.compose.material3.TextButton(onClick = {
                                 showConnectPrompt = false
                                 hasAutoPrompted = false
-                            }) { androidx.compose.material3.Text("继续搜索") }
+                            }) { androidx.compose.material3.Text("继续搜索", maxLines = 1) }
                             androidx.compose.material3.Button(onClick = {
                                 val ip = manualIpInput.trim()
                                 if (ip.isNotBlank()) {
@@ -298,12 +298,12 @@ private fun MainApp(helper: DatabaseHelper, app: OderApp) {
                                     val client = SyncClient(ip)
                                     hostViewModel.connectAndSync(ip, ip, client, discoveryService)
                                 }
-                            }) { androidx.compose.material3.Text("手动连接") }
+                            }) { androidx.compose.material3.Text("手动连接", maxLines = 1) }
                             if (role == RoleViewModel.Role.STAFF) {
                                 androidx.compose.material3.Button(onClick = {
                                     showConnectPrompt = false
                                     hostViewModel.setHostMode(HostServer(helper), discoveryService)
-                                }) { androidx.compose.material3.Text("作为主机") }
+                                }) { androidx.compose.material3.Text("作为主机", maxLines = 1) }
                             }
                         }
                     }
