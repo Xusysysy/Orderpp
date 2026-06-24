@@ -1,4 +1,4 @@
-# Oder++ 智能吧台助手
+# Order++ 智能吧台助手
 
 > 酒吧/餐厅点单管理 App，Android 平板优先，支持员工端与客人端双角色、多设备局域网同步。
 
@@ -128,11 +128,11 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 ## 项目结构
 
 ```
-Oder++/
+Order++/
 ├── app/
 │   ├── build.gradle.kts          # 应用构建配置（依赖、Room schema）
-│   └── src/main/java/com/opp/oder/
-│       ├── OderApp.kt            # Application，初始化 Room
+│   └── src/main/java/com/opp/Order/
+│       ├── OrderApp.kt            # Application，初始化 Room
 │       ├── MainActivity.kt       # 入口 Activity
 │       ├── data/
 │       │   ├── db/               # Room 数据库、实体、DAO

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opp.oder"
+    namespace = "com.opp.order"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -13,7 +13,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.opp.oder"
+        applicationId = "com.opp.order"
         minSdk = 24
         targetSdk = 36
         versionCode = 4
@@ -24,7 +24,7 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../oder.keystore")
+            storeFile = file("../order.keystore")
             storePassword = "oder123"
             keyAlias = "oder"
             keyPassword = "oder123"
@@ -82,7 +82,7 @@ dependencies {
 }
 
 tasks.register("setupAdbForward") {
-    group = "oder"
+    group = "order"
     description = "Auto-setup ADB port forwarding for emulator LAN sync"
 
     doLast {

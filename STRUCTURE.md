@@ -1,4 +1,4 @@
-# Oder++ 项目架构
+# Order++ 项目架构
 
 ## 项目目标
 
@@ -16,8 +16,8 @@
 ## 项目结构
 
 ```
-app/src/main/java/com/opp/oder/
-├── OderApp.kt                    # Application，初始化 SQLite 数据库
+app/src/main/java/com/opp/Order/
+├── OrderApp.kt                    # Application，初始化 SQLite 数据库
 ├── MainActivity.kt               # 入口 Activity，setContent
 │
 ├── data/
@@ -50,7 +50,7 @@ app/src/main/java/com/opp/oder/
 │   └── HostViewModel.kt          # Host/Client 模式切换 + 网络生命周期
 │
 ├── ui/
-│   ├── OderAppContent.kt         # 顶层：Loading → Error → MainApp（直接进主界面，默认客人模式）
+│   ├── OrderAppContent.kt         # 顶层：Loading → Error → MainApp（直接进主界面，默认客人模式）
 │   ├── theme/
 │   │   ├── Color.kt              # 暗色主题色板 (琥珀主色)
 │   │   ├── Type.kt               # 字体排版
@@ -119,7 +119,7 @@ MainScreen 内部导航：
 
 ## 数据持久化
 
-- **桌位记住**: 客人首次选桌后保存到 SharedPreferences (`oder_prefs`)，下次启动自动恢复桌位号，不再反复弹出选择抽屉
+- **桌位记住**: 客人首次选桌后保存到 SharedPreferences (`order_prefs`)，下次启动自动恢复桌位号，不再反复弹出选择抽屉
 - **拖拽排序持久化**: 拖拽顺序通过 `sort_order` 字段写入 SQLite，菜单/桌位排序跨次启动保持
 - **数据库版本**: v1 → v2，`onUpgrade` 通过 ALTER TABLE 添加 `sort_order` 列，不丢失已有数据
 
@@ -128,10 +128,10 @@ MainScreen 内部导航：
 | 文件 | 关键项 |
 |------|--------|
 | `gradle.properties` | `org.gradle.java.home=D\:/AndroidDev/jbr` |
-| `app/build.gradle.kts` | versionCode=3, versionName="1.0.2", debug 签名使用 oder.keystore |
+| `app/build.gradle.kts` | versionCode=3, versionName="1.0.2", debug 签名使用 Order.keystore |
 | `gradle/libs.versions.toml` | Ktor 3.1.2, Kotlin 2.2.10, AGP 9.2.1 |
 | `local.properties` | `sdk.dir=C\:\\Users\\20119\\AppData\\Local\\Android\\Sdk` |
-| `oder.keystore` | 签名密钥 (alias=oder, password=oder123) |
+| `Order.keystore` | 签名密钥 (alias=Order, password=oder123) |
 | `res/xml/network_security_config.xml` | 允许明文 HTTP 局域网通信 |
 
 ## 构建命令

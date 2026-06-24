@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Oder++"
+rootProject.name = "Order++"
 include(":app")
