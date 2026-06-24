@@ -923,7 +923,7 @@ private fun TabletMenuPanel(
                                         else selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }
                                     }
                                 },
-                                showAddButton = false,
+                                showAddButton = !isStaff,
                                 orderQuantity = orderQuantities[item.id] ?: 0,
                                 onAddClick = { _, _ ->
                                     selectedTableId?.let { tid -> orderViewModel.addItem(tid, item.id, item.name, item.price) }

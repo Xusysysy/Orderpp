@@ -22,7 +22,10 @@ class TableViewModel(
     val zones: StateFlow<List<String>> = _zones
 
     init {
-        loadTables()
+        viewModelScope.launch {
+            repository.createDefaultTables()
+            loadTables()
+        }
     }
 
     private fun loadTables() {
