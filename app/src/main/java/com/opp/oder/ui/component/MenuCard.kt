@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -56,42 +58,36 @@ fun MenuCard(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "¥%.0f".format(item.price),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (item.hasRecipe) {
-                    Text(
-                        text = "查看配方 →",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                        maxLines = 1
-                    )
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
-                if (showAddButton) {
-                    if (orderQuantity > 0) {
-                        QuantityStepper(
-                            quantity = orderQuantity,
-                            onIncrement = onIncrement,
-                            onDecrement = onDecrement
+        Box {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "¥%.0f".format(item.price),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 32.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (item.hasRecipe) {
+                        Text(
+                            text = "查看配方 →",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            maxLines = 1
                         )
                     } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    if (showAddButton) {
                         Box(
                             modifier = Modifier
                                 .onGloballyPositioned { coords ->
@@ -113,6 +109,14 @@ fun MenuCard(
                             )
                         }
                     }
+                }
+            }
+            if (orderQuantity > 0) {
+                Badge(
+                    modifier = Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp),
+                    containerColor = MaterialTheme.colorScheme.error
+                ) {
+                    Text("$orderQuantity")
                 }
             }
         }

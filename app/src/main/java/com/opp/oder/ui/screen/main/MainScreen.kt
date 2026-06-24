@@ -96,6 +96,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import com.opp.oder.data.db.dao.OrderBill
 import com.opp.oder.data.db.entity.MenuItemEntity
 import com.opp.oder.data.db.entity.OrderItemEntity
@@ -609,14 +610,79 @@ private fun TabletMainContent(
     var showPinDialog by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
     val pinError by roleViewModel.pinError.collectAsStateWithLifecycle()
+    var prevOrderCount by remember { mutableIntStateOf(0) }
+    val hasNewOrder = allOrders.size > prevOrderCount && prevOrderCount > 0
+    val currentPage = pagerState.currentPage
+
+    LaunchedEffect(isStaff) {
+        if (isStaff) {
+            orderViewModel.loadAllOrders()
+            orderViewModel.startAutoRefresh()
+        } else {
+            orderViewModel.stopAutoRefresh()
+        }
+    }
+
+    LaunchedEffect(allOrders) {
+        if (allOrders.size > prevOrderCount && prevOrderCount > 0) {
+            // New order detected – reset flag after page switch or dismissal
+        }
+        prevOrderCount = allOrders.size
+    }
+
+    var newOrderBadge by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentPage, allOrders.size) {
+        if (isStaff && currentPage != 0 && allOrders.size > prevOrderCount && prevOrderCount > 0) {
+            newOrderBadge = true
+        }
+    }
+
+    LaunchedEffect(currentPage) {
+        if (currentPage == 0) {
+            newOrderBadge = false
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Page indicators with new-order badge
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(
+                        if (currentPage == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        shape = CircleShape
+                    ))
+                    Spacer(Modifier.width(4.dp))
+                    Text("点餐", style = MaterialTheme.typography.labelSmall, color = if (currentPage == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                    if (newOrderBadge) {
+                        Spacer(Modifier.width(4.dp))
+                        Badge(containerColor = MaterialTheme.colorScheme.error) {
+                            Text("!")
+                        }
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).background(
+                        if (currentPage == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        shape = CircleShape
+                    ))
+                    Spacer(Modifier.width(4.dp))
+                    Text("我的", style = MaterialTheme.typography.labelSmall, color = if (currentPage == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                }
+            }
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { page ->
             when (page) {
                 0 -> {
                     Row(modifier = Modifier.fillMaxSize()) {
@@ -646,7 +712,8 @@ private fun TabletMainContent(
                                     allOrders = allOrders,
                                     selectedBillId = selectedBillId,
                                     onSelectBill = { orderViewModel.selectBill(it) },
-                                    onSettleBill = { orderViewModel.settleBill(it) }
+                                    onSettleBill = { orderViewModel.settleBill(it) },
+                                    hasNewOrder = hasNewOrder
                                 )
                             } else {
                                 TabletGuestBillPanel(
@@ -671,6 +738,7 @@ private fun TabletMainContent(
                 }
             }
         }
+        } // Column
     }
 
     // Recipe sheet
@@ -966,14 +1034,25 @@ private fun TabletStaffBillPanel(
     allOrders: List<com.opp.oder.data.db.dao.OrderBill>,
     selectedBillId: Long?,
     onSelectBill: (Long) -> Unit,
-    onSettleBill: (Long) -> Unit
+    onSettleBill: (Long) -> Unit,
+    hasNewOrder: Boolean = false
 ) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    LaunchedEffect(hasNewOrder) {
+        if (hasNewOrder) {
+            delay(3000)
+            try { listState.animateScrollToItem(0) } catch (_: Exception) {}
+        }
+    }
+
     if (allOrders.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("暂无订单", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
         }
     } else {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1050,7 +1129,8 @@ private fun TabletGuestBillPanel(
                                     }
                                     QuantityStepper(quantity = item.quantity,
                                         onIncrement = { orderViewModel.updateQuantity(item, 1) },
-                                        onDecrement = { orderViewModel.updateQuantity(item, -1) })
+                                        onDecrement = { orderViewModel.updateQuantity(item, -1) },
+                                        compact = true)
                                 }
                             }
                             Button(onClick = {
@@ -1083,8 +1163,9 @@ private fun TabletGuestBillPanel(
                                     Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text(item.name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                                         QuantityStepper(quantity = item.quantity,
-                                            onIncrement = { orderViewModel.updateSubmittedQty(sub.order.id, item, 1) },
-                                            onDecrement = { orderViewModel.updateSubmittedQty(sub.order.id, item, -1) })
+                                                onIncrement = { orderViewModel.updateSubmittedQty(sub.order.id, item, 1) },
+                                                onDecrement = { orderViewModel.updateSubmittedQty(sub.order.id, item, -1) },
+                                                compact = true)
                                     }
                                 }
                                 Button(onClick = { orderViewModel.resubmitOrder(sub, hostViewModel) },

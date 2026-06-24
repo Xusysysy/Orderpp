@@ -26,16 +26,18 @@ fun QuantityStepper(
     quantity: Int,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
+    val btnSize = if (compact) 26.dp else 36.dp
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(btnSize)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                 .clickable { onDecrement() },
@@ -49,12 +51,12 @@ fun QuantityStepper(
         }
         Text(
             text = "$quantity",
-            style = MaterialTheme.typography.titleMedium,
+            style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(btnSize)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary)
                 .clickable { onIncrement() },
